@@ -17,12 +17,22 @@
   box-sizing: border-box;
 }
 
+/* App Wrapper */
+.app-wrapper {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 100vh !important;
+  width: 100% !important;
+}
+
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--bg);
   color: var(--dark);
   line-height: 1.5;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -69,25 +79,27 @@ body {
   background: var(--bg);
 }
 
-/* Container */
-.container {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  min-height: calc(100vh - 73px);
+/* Main Container */
+.main-container {
+  flex: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 40px 20px !important;
+  min-height: calc(100vh - 73px) !important;
+  width: 100% !important;
 }
 
 /* Form Card */
 .form-card {
-  background: var(--white);
-  border-radius: 16px;
-  padding: 64px 80px 80px;
-  max-width: 560px;
-  width: 100%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  background: var(--white) !important;
+  border-radius: 16px !important;
+  padding: 64px 80px 80px !important;
+  max-width: 560px !important;
+  width: 100% !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  transition: opacity 0.3s ease, transform 0.3s ease !important;
+  margin: 0 auto !important;
 }
 
 @media (max-width: 768px) {

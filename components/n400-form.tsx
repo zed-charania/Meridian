@@ -546,7 +546,7 @@ export default function N400Form() {
   );
 
   return (
-    <>
+    <div className="app-wrapper">
       {/* Progress Bar */}
       <div className="progress-bar" style={{ width: `${progress}%` }} />
 
@@ -560,7 +560,7 @@ export default function N400Form() {
       </header>
 
       {/* Main Container */}
-      <div className="container">
+      <div className="main-container">
         <div className="form-card fade-in" key={currentStep}>
           {currentStepData.part && (
             <div className="section-label">{currentStepData.part} • {currentStepData.section}</div>
@@ -1178,7 +1178,7 @@ export default function N400Form() {
       <button className="support-btn" title="Get help">
         <HelpCircle size={24} />
       </button>
-    </>
+    </div>
   );
 }
 
