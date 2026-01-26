@@ -13,6 +13,7 @@ export interface IntakeFormData {
   // PART 1: ELIGIBILITY
   // ═══════════════════════════════════════════════════════════════
   eligibility_basis: string;
+  other_basis_reason?: string;
 
   // ═══════════════════════════════════════════════════════════════
   // PART 2: INFORMATION ABOUT YOU

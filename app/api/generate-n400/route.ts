@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
       // PART 1: ELIGIBILITY
       // ═══════════════════════════════════════════════════════════════
       eligibility_basis: dbData.eligibility_basis || "5year",
+      other_basis_reason: dbData.other_basis_reason,
 
       // ═══════════════════════════════════════════════════════════════
       // PART 2: INFORMATION ABOUT YOU
