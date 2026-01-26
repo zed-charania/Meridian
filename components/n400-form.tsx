@@ -993,10 +993,79 @@ export default function N400Form() {
 
   const currentStepData = STEPS[currentStep - 1];
 
-  // Helper component for Yes/No radio buttons
-  const YesNoField = ({ name, label }: { name: keyof FormData; label: string }) => (
+  // Info Icon Component with Tooltip
+  const InfoIcon = ({ tooltip }: { tooltip: string }) => {
+    const [showTooltip, setShowTooltip] = useState(false);
+
+    return (
+      <div style={{ position: "relative", display: "inline-block", marginLeft: "6px" }}>
+        <button
+          type="button"
+          onMouseEnter={() => setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+          onClick={() => setShowTooltip(!showTooltip)}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "0",
+            display: "inline-flex",
+            alignItems: "center",
+            color: "var(--gray)",
+            transition: "color 0.2s",
+          }}
+          onFocus={() => setShowTooltip(true)}
+          onBlur={() => setShowTooltip(false)}
+        >
+          <HelpCircle size={16} />
+        </button>
+        {showTooltip && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: "100%",
+              left: "50%",
+              transform: "translateX(-50%)",
+              marginBottom: "8px",
+              padding: "12px 16px",
+              background: "var(--dark)",
+              color: "white",
+              borderRadius: "8px",
+              fontSize: "13px",
+              lineHeight: "1.5",
+              maxWidth: "320px",
+              width: "max-content",
+              zIndex: 1000,
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+              whiteSpace: "normal",
+            }}
+            onMouseEnter={() => setShowTooltip(true)}
+            onMouseLeave={() => setShowTooltip(false)}
+          >
+            {tooltip}
+            <div
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: "50%",
+                transform: "translateX(-50%)",
+                border: "6px solid transparent",
+                borderTopColor: "var(--dark)",
+              }}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Helper component for Yes/No radio buttons with optional tooltip
+  const YesNoField = ({ name, label, tooltip }: { name: keyof FormData; label: string; tooltip?: string }) => (
     <div className="form-group">
-      <label className="form-label">{label}</label>
+      <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+        {label}
+        {tooltip && <InfoIcon tooltip={tooltip} />}
+      </label>
       <div className="radio-group">
         <div className="radio-option">
           <input type="radio" id={`${name}-yes`} value="yes" {...register(name)} />
@@ -1007,6 +1076,7 @@ export default function N400Form() {
           <label htmlFor={`${name}-no`} className="radio-label">No</label>
         </div>
       </div>
+      {errors[name] && <p className="error-message">{errors[name]?.message}</p>}
     </div>
   );
 
@@ -1043,9 +1113,11 @@ export default function N400Form() {
             {currentStep === 1 && (
               <div className="form-group">
                 <div className="form-group" style={{ marginBottom: "24px" }}>
-                  <label className="form-label">Enter Your 9 Digit A-Number:</label>
+                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                    Enter Your 9 Digit A-Number
+                    <InfoIcon tooltip="Found on your green card (9 digits after 'A')" />
+                  </label>
                   <input type="text" className="form-input" placeholder="A-XXXXXXXXX" style={{ maxWidth: "250px" }} {...register("a_number")} />
-                  <p className="helper-text">Found on your green card (9 digits after "A")</p>
                 </div>
                 
                 <label className="form-label">Select the basis for your eligibility</label>
@@ -1087,14 +1159,16 @@ export default function N400Form() {
 
                 {(watchedData.eligibility_basis === "qualified_employment") && (
                   <div className="form-group" style={{ marginTop: "20px" }}>
-                    <label className="form-label">If your residential address is outside the United States and you are filing under INA section 319(b), select the USCIS field office where you would like to have your naturalization interview.</label>
+                    <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                      Select USCIS Field Office for Interview
+                      <InfoIcon tooltip="If your residential address is outside the United States and you are filing under INA section 319(b), select the USCIS field office where you would like to have your naturalization interview. You can find a USCIS field office at www.uscis.gov/field-offices" />
+                    </label>
                     <select className="form-select" {...register("uscis_field_office")}>
                       <option value="">Select USCIS Field Office...</option>
                       {USCIS_FIELD_OFFICES.map(office => (
                         <option key={office} value={office}>{office}</option>
                       ))}
                     </select>
-                    <p className="helper-text">You can find a USCIS field office at www.uscis.gov/field-offices</p>
                   </div>
                 )}
               </div>
@@ -1107,7 +1181,10 @@ export default function N400Form() {
               <>
                 {/* Item 1: Current Legal Name */}
                 <div className="form-group">
-                  <label className="form-label">1. Your Current Legal Name (do not provide a nickname)</label>
+                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                    1. Your Current Legal Name
+                    <InfoIcon tooltip="Do not provide a nickname" />
+                  </label>
                   <div className="form-row-thirds">
                     <div>
                       <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Family Name (Last Name)</label>
@@ -1127,7 +1204,11 @@ export default function N400Form() {
                 </div>
 
                 {/* Item 2: Other Names Used */}
-                <YesNoField name="has_used_other_names" label="2. Other Names You Have Used Since Birth (see the Instructions for this Item Number for more information about which names to include)" />
+                <YesNoField 
+                  name="has_used_other_names" 
+                  label="2. Have you used other names since birth?" 
+                  tooltip="Include all names you have used, including maiden names, previous married names, aliases, or any other names used in official documents. See the Instructions for this Item Number for more information about which names to include."
+                />
                 
                 {watchedData.has_used_other_names === "yes" && (
                   <div className="form-group" style={{ marginTop: "10px" }}>
@@ -1159,18 +1240,18 @@ export default function N400Form() {
                           </button>
                         </div>
                         <div className="form-row-thirds">
-                          <div>
+                    <div>
                             <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Family Name (Last Name)</label>
                             <input type="text" className="form-input" placeholder="Last Name" {...register(`other_names.${index}.family_name`)} />
-                          </div>
+                    </div>
                           <div>
                             <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Given Name (First Name)</label>
                             <input type="text" className="form-input" placeholder="First Name" {...register(`other_names.${index}.given_name`)} />
-                          </div>
+                  </div>
                           <div>
                             <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Middle Name (if applicable)</label>
                             <input type="text" className="form-input" placeholder="Middle Name" {...register(`other_names.${index}.middle_name`)} />
-                          </div>
+                </div>
                         </div>
                       </div>
                     ))}
@@ -1193,7 +1274,7 @@ export default function N400Form() {
                 
                 {watchedData.wants_name_change === "yes" && (
                   <div className="form-group" style={{ marginTop: "20px" }}>
-                    <label className="form-label">If you answered 'Yes,' type or print the new name you would like to use:</label>
+                    <label className="form-label">Type or print the new name you would like to use:</label>
                     <div className="form-row-thirds">
                       <div>
                         <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Family Name (Last Name)</label>
@@ -1218,7 +1299,7 @@ export default function N400Form() {
 
                 {/* Item 4: USCIS Online Account Number */}
                 <div className="form-group">
-                  <label className="form-label">4. USCIS Online Account Number (if any)</label>
+                  <label className="form-label">4. USCIS Online Account Number</label>
                   <input type="text" className="form-input" placeholder="12-digit number" style={{ maxWidth: "250px" }} {...register("uscis_account_number")} />
                 </div>
 
@@ -1240,17 +1321,21 @@ export default function N400Form() {
 
                 {/* Item 6: Date of Birth */}
                 <div className="form-group">
-                  <label className="form-label">6. Date of Birth (mm/dd/yyyy)</label>
+                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                    6. Date of Birth
+                    <InfoIcon tooltip="In addition to your actual date of birth, include any other dates of birth you have ever used, including dates used in connection with any legal names or non-legal names, in the space provided in Part 14. Additional Information." />
+                  </label>
                   <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("date_of_birth")} />
-                  <p className="helper-text" style={{ marginTop: "4px" }}>In addition to your actual date of birth, include any other dates of birth you have ever used, including dates used in connection with any legal names or non-legal names, in the space provided in Part 14. Additional Information.</p>
                   {errors.date_of_birth && <p className="error-message">{errors.date_of_birth.message}</p>}
                 </div>
 
                 {/* Item 7: Date Became Permanent Resident */}
                   <div className="form-group">
-                  <label className="form-label">7. If you are a lawful permanent resident, provide the date you became a lawful permanent resident (mm/dd/yyyy).</label>
+                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                    7. Date You Became a Lawful Permanent Resident
+                    <InfoIcon tooltip="If you are a lawful permanent resident, provide the date you became a lawful permanent resident (mm/dd/yyyy). Found on your green card as 'Resident Since'" />
+                  </label>
                   <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("date_became_permanent_resident")} />
-                  <p className="helper-text" style={{ marginTop: "4px" }}>Found on your green card as "Resident Since"</p>
                   {errors.date_became_permanent_resident && <p className="error-message">{errors.date_became_permanent_resident.message}</p>}
                 </div>
 
@@ -1266,43 +1351,50 @@ export default function N400Form() {
 
                 {/* Item 9: Country of Citizenship */}
                   <div className="form-group">
-                  <label className="form-label">9. Country of Citizenship or Nationality</label>
+                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                    9. Country of Citizenship or Nationality
+                    <InfoIcon tooltip="If you are a citizen or national of more than one country, list additional countries of nationality in the space provided in Part 14. Additional Information." />
+                  </label>
                     <select className="form-select" {...register("country_of_citizenship")}>
                       <option value="">Select...</option>
                       {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
-                  <p className="helper-text" style={{ marginTop: "4px" }}>If you are a citizen or national of more than one country, list additional countries of nationality in the space provided in Part 14. Additional Information.</p>
                     {errors.country_of_citizenship && <p className="error-message">{errors.country_of_citizenship.message}</p>}
                   </div>
 
                 {/* Item 10: Parent U.S. Citizen */}
-                <YesNoField name="parent_us_citizen_before_18" label="10. Was your mother or father (including adoptive mother or father) a U.S. citizen before your 18th birthday?" />
-                {watchedData.parent_us_citizen_before_18 === "yes" && (
-                  <p className="helper-text" style={{ color: "var(--dark)", fontWeight: "500", marginTop: "-10px" }}>
-                    If you answered "Yes," you may already be a U.S. citizen. If you are a U.S. citizen, you should not complete Form N-400.
-                  </p>
-                )}
+                <YesNoField 
+                  name="parent_us_citizen_before_18" 
+                  label="10. Was your parent a U.S. citizen before your 18th birthday?" 
+                  tooltip="Was your mother or father (including adoptive mother or father) a U.S. citizen before your 18th birthday? If you answered 'Yes,' you may already be a U.S. citizen. If you are a U.S. citizen, you should not complete Form N-400."
+                />
 
                 {/* Item 11: Disability Accommodations */}
-                <YesNoField name="request_disability_accommodations" label="11. Do you have a physical or developmental disability or mental impairment that prevents you from demonstrating your knowledge and understanding of the English language or civics requirements for naturalization?" />
-                {watchedData.request_disability_accommodations === "yes" && (
-                  <p className="helper-text" style={{ marginTop: "-10px" }}>
-                    If you answered "Yes," submit a completed Form N-648, Medical Certification for Disability Exceptions, when you file your Form N-400. See the Naturalization Testing and Exceptions section of the Instructions for additional information about exceptions from the English language test, including exceptions based on age and years as a lawful permanent resident.
-                  </p>
-                )}
+                <YesNoField 
+                  name="request_disability_accommodations" 
+                  label="11. Do you need disability accommodations?" 
+                  tooltip="Do you have a physical or developmental disability or mental impairment that prevents you from demonstrating your knowledge and understanding of the English language or civics requirements for naturalization? If you answered 'Yes,' submit a completed Form N-648, Medical Certification for Disability Exceptions, when you file your Form N-400."
+                />
 
                 {/* Item 12: Social Security Update */}
-                <YesNoField name="ssa_wants_card" label="12.a. Do you want the Social Security Administration (SSA) to issue you an original or replacement Social Security card and update your immigration status with the SSA if and when you are naturalized?" />
+                <YesNoField 
+                  name="ssa_wants_card" 
+                  label="12.a. Do you want SSA to issue you a Social Security card?" 
+                  tooltip="Do you want the Social Security Administration (SSA) to issue you an original or replacement Social Security card and update your immigration status with the SSA if and when you are naturalized?"
+                />
                 
                 {watchedData.ssa_wants_card === "yes" && (
                   <>
                     <div className="form-group" style={{ marginTop: "10px" }}>
-                      <label className="form-label">12.b. Provide your Social Security number (SSN) (if any).</label>
+                      <label className="form-label">12.b. Social Security Number (if any)</label>
                       <input type="text" className="form-input" placeholder="XXX-XX-XXXX" style={{ maxWidth: "200px" }} {...register("ssn")} />
                 </div>
-                    <YesNoField name="ssa_consent_disclosure" label="12.c. Consent for Disclosure: I authorize disclosure of information from this application and USCIS systems to the SSA as required for the purpose of assigning me an SSN, issuing me an original or replacement Social Security card, and updating my immigration status with the SSA." />
+                    <YesNoField 
+                      name="ssa_consent_disclosure" 
+                      label="12.c. Do you consent to disclosure of information to SSA?" 
+                      tooltip="I authorize disclosure of information from this application and USCIS systems to the SSA as required for the purpose of assigning me an SSN, issuing me an original or replacement Social Security card, and updating my immigration status with the SSA. NOTE: If you answered 'Yes' to Item Number 12.a., you must also answer 'Yes' to Item Number 12.c., Consent for Disclosure, to receive a card."
+                    />
                     {errors.ssa_consent_disclosure && <p className="error-message">{errors.ssa_consent_disclosure.message}</p>}
-                    <p className="helper-text" style={{ marginTop: "-10px" }}>NOTE: If you answered "Yes" to Item Number 12.a., you must also answer "Yes" to Item Number 12.c., Consent for Disclosure, to receive a card.</p>
                   </>
                 )}
 
@@ -1317,13 +1409,13 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 3 && (
               <>
-                <p className="helper-text" style={{ marginBottom: "24px" }}>
-                  NOTE: USCIS requires you to complete the categories below to conduct background checks. (See the Form N-400 Instructions for more information.)
+                <p className="helper-text" style={{ marginBottom: "24px", fontSize: "14px" }}>
+                  USCIS requires you to complete the categories below to conduct background checks.
                 </p>
 
                 {/* Item 1: Ethnicity */}
                 <div className="form-group">
-                  <label className="form-label">1. Ethnicity (Select only one box)</label>
+                  <label className="form-label">1. Ethnicity</label>
                   <div className="radio-group">
                     <div className="radio-option">
                       <input type="radio" id="ethnicity-hispanic" value="hispanic" {...register("ethnicity")} />
@@ -1339,7 +1431,7 @@ export default function N400Form() {
 
                 {/* Item 2: Race */}
                 <div className="form-group">
-                  <label className="form-label">2. Race (Select all applicable boxes)</label>
+                  <label className="form-label">2. Race</label>
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
                     {RACES.map((race) => (
                       <label key={race.value} className="checkbox-group">
@@ -1466,33 +1558,33 @@ export default function N400Form() {
                     <label className="form-label" style={{ fontSize: "14px", marginBottom: "8px" }}>Current Physical Address</label>
                     <div className="form-row" style={{ gridTemplateColumns: "1fr 120px", gap: "8px" }}>
                       <input type="text" className="form-input" placeholder="Street Number and Name" {...register("street_address")} />
-                      <input type="text" className="form-input" placeholder="Apt/Ste/Flr" {...register("apt_ste_flr")} />
-                    </div>
-                    {errors.street_address && <p className="error-message">{errors.street_address.message}</p>}
-                    
+                    <input type="text" className="form-input" placeholder="Apt/Ste/Flr" {...register("apt_ste_flr")} />
+                  </div>
+                  {errors.street_address && <p className="error-message">{errors.street_address.message}</p>}
+
                     <div className="form-row-thirds" style={{ marginTop: "12px" }}>
-                      <div className="form-group">
+                  <div className="form-group">
                         <label className="form-label" style={{ fontSize: "14px" }}>City or Town</label>
-                        <input type="text" className="form-input" placeholder="City" {...register("city")} />
-                        {errors.city && <p className="error-message">{errors.city.message}</p>}
-                      </div>
-                      <div className="form-group">
+                    <input type="text" className="form-input" placeholder="City" {...register("city")} />
+                    {errors.city && <p className="error-message">{errors.city.message}</p>}
+                  </div>
+                  <div className="form-group">
                         <label className="form-label" style={{ fontSize: "14px" }}>State / Province</label>
-                        <select className="form-select" {...register("state")}>
-                          <option value="">Select...</option>
-                          {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                        {errors.state && <p className="error-message">{errors.state.message}</p>}
-                      </div>
-                      <div className="form-group">
+                    <select className="form-select" {...register("state")}>
+                      <option value="">Select...</option>
+                      {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    {errors.state && <p className="error-message">{errors.state.message}</p>}
+                  </div>
+                  <div className="form-group">
                         <label className="form-label" style={{ fontSize: "14px" }}>ZIP Code / Postal Code</label>
                         <input type="text" className="form-input" placeholder="ZIP" {...register("zip_code")} />
-                        {errors.zip_code && <p className="error-message">{errors.zip_code.message}</p>}
-                      </div>
-                    </div>
-                    
+                    {errors.zip_code && <p className="error-message">{errors.zip_code.message}</p>}
+                  </div>
+                </div>
+
                     <div className="form-row-equal" style={{ marginTop: "12px" }}>
-                      <div className="form-group">
+                <div className="form-group">
                         <label className="form-label" style={{ fontSize: "14px" }}>Dates of Residence: From (mm/dd/yyyy)</label>
                         <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "150px" }} {...register("residence_from")} />
                       </div>
@@ -1512,12 +1604,12 @@ export default function N400Form() {
                   <div className="form-group" style={{ marginTop: "20px" }}>
                     <label className="form-label">3. Current Mailing Address (Safe Mailing Address, if applicable)</label>
                     <div className="form-group" style={{ marginTop: "12px", padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
-                      <div className="form-group">
+                    <div className="form-group">
                         <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Street Number and Name</label>
                         <div className="form-row" style={{ gridTemplateColumns: "1fr 120px", gap: "8px" }}>
-                          <input type="text" className="form-input" placeholder="Street Address" {...register("mailing_street_address")} />
+                      <input type="text" className="form-input" placeholder="Street Address" {...register("mailing_street_address")} />
                           <input type="text" className="form-input" placeholder="Apt/Ste/Flr" {...register("mailing_apt_ste_flr")} />
-                        </div>
+                    </div>
                       </div>
                       <div className="form-group" style={{ marginTop: "12px" }}>
                         <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>In Care Of Name (if any)</label>
@@ -1526,18 +1618,18 @@ export default function N400Form() {
                       <div className="form-row-thirds" style={{ marginTop: "12px" }}>
                         <div className="form-group">
                           <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>City or Town</label>
-                          <input type="text" className="form-input" placeholder="City" {...register("mailing_city")} />
+                      <input type="text" className="form-input" placeholder="City" {...register("mailing_city")} />
                         </div>
                         <div className="form-group">
                           <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>State / Province</label>
-                          <select className="form-select" {...register("mailing_state")}>
+                      <select className="form-select" {...register("mailing_state")}>
                             <option value="">Select...</option>
-                            {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
+                        {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
                         </div>
                         <div className="form-group">
                           <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>ZIP Code / Postal Code</label>
-                          <input type="text" className="form-input" placeholder="ZIP" {...register("mailing_zip_code")} />
+                      <input type="text" className="form-input" placeholder="ZIP" {...register("mailing_zip_code")} />
                         </div>
                       </div>
                     </div>
@@ -1686,9 +1778,9 @@ export default function N400Form() {
                                 </button>
                               )}
                             </div>
-                          </div>
-                        ))}
                       </div>
+                    ))}
+                  </div>
                     )}
 
                     {employmentFields.length > 0 && employmentFields.length < 3 && (
@@ -1707,7 +1799,7 @@ export default function N400Form() {
                         Maximum of 3 entries reached. If you need to add more employment or school entries, use Part 14. Additional Information.
                       </p>
                     )}
-                  </div>
+                </div>
                 </div>
               </>
             )}
@@ -1849,7 +1941,7 @@ export default function N400Form() {
                     )}
 
                     {/* Item 3: Times Married */}
-                    <div className="form-group">
+                  <div className="form-group">
                       <label className="form-label">3. How many times have you been married? (See the Specific Instructions by Item Number section of the Instructions for more information about which marriages to include.)</label>
                       <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("times_married")} />
                       <p className="helper-text" style={{ marginTop: "4px" }}>Provide current marriage certificate and any divorce decree, annulment decree, or death certificate showing that your prior marriages were terminated (if applicable).</p>
@@ -1871,7 +1963,7 @@ export default function N400Form() {
                             <div>
                               <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Family Name (Last Name)</label>
                               <input type="text" className="form-input" {...register("spouse_last_name")} />
-                            </div>
+                  </div>
                             <div>
                               <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Given Name (First Name)</label>
                               <input type="text" className="form-input" {...register("spouse_first_name")} />
@@ -1884,16 +1976,16 @@ export default function N400Form() {
                         </div>
 
                         {/* Item 4.b: Spouse Date of Birth */}
-                        <div className="form-group">
+                  <div className="form-group">
                           <label className="form-label">4.b. Current Spouse's Date of Birth (mm/dd/yyyy)</label>
                           <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_of_birth")} />
-                        </div>
+                  </div>
 
                         {/* Item 4.c: Date Entered into Marriage */}
                         <div className="form-group">
                           <label className="form-label">4.c. Date You Entered into Marriage with Current Spouse (mm/dd/yyyy)</label>
                           <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_of_marriage")} />
-                        </div>
+                </div>
 
                         {/* Item 4.d: Spouse Address Same */}
                         <YesNoField name="spouse_address_same_as_applicant" label="4.d. Is your current spouse's present physical address the same as your physical address?" />
@@ -1921,19 +2013,19 @@ export default function N400Form() {
                             </div>
 
                             {watchedData.spouse_citizenship_by_birth === "no" && (
-                              <div className="form-group">
+                  <div className="form-group">
                                 <label className="form-label">5.b. Date Your Current Spouse Became a U.S. Citizen (mm/dd/yyyy)</label>
                                 <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_became_citizen")} />
-                              </div>
+                  </div>
                             )}
                           </>
                         )}
 
                         {/* Item 6: Spouse A-Number */}
-                        <div className="form-group">
+                  <div className="form-group">
                           <label className="form-label">6. Current Spouse's Alien Registration Number (A-Number) (if any)</label>
                           <input type="text" className="form-input" placeholder="A-XXXXXXXXX" style={{ maxWidth: "200px" }} {...register("spouse_a_number")} />
-                        </div>
+                  </div>
 
                         {/* Item 7: Spouse Times Married */}
                         <div className="form-group">
@@ -1946,7 +2038,7 @@ export default function N400Form() {
                         <div className="form-group">
                           <label className="form-label">8. Current Spouse's Current Employer or Company</label>
                           <input type="text" className="form-input" {...register("spouse_current_employer")} />
-                        </div>
+                </div>
                       </>
                     )}
                   </>
@@ -1967,7 +2059,10 @@ export default function N400Form() {
                 {parseInt(watchedData.total_children || "0") > 0 && (
                   <div>
                     <div className="form-group" style={{ marginTop: "20px" }}>
-                      <label className="form-label">2. Provide the following information about your children identified in Item Number 1. For the residence and relationship columns, you must type or print one of the valid options listed. If any of your children do not reside with you, provide the address(es) where those children live in Part 14. Additional Information. If you have more than three children, use the space provided in Part 14. Additional Information.</label>
+                      <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                        2. Provide information about your children
+                        <InfoIcon tooltip="For the residence and relationship columns, you must type or print one of the valid options listed. If any of your children do not reside with you, provide the address(es) where those children live in Part 14. Additional Information. If you have more than three children, use the space provided in Part 14. Additional Information." />
+                      </label>
                       
                       {childrenFields.slice(0, Math.min(parseInt(watchedData.total_children || "0"), 10)).map((field, index) => (
                         <div key={field.id} style={{ marginBottom: "24px", padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
@@ -1983,46 +2078,56 @@ export default function N400Form() {
                               </button>
                             )}
                           </div>
-                          <div className="form-row-equal">
-                            <div className="form-group">
+                <div className="form-row-equal">
+                  <div className="form-group">
                               <label className="form-label">Son or Daughter's Name (First Name and Family Name)</label>
                               <div className="form-row-equal">
                                 <input type="text" className="form-input" placeholder="First Name" {...register(`children.${index}.first_name`)} />
                                 <input type="text" className="form-input" placeholder="Last Name" {...register(`children.${index}.last_name`)} />
-                              </div>
-                            </div>
-                          </div>
+                  </div>
+                  </div>
+                </div>
                           <div className="form-row-equal">
-                            <div className="form-group">
+                  <div className="form-group">
                               <label className="form-label">Date of Birth (mm/dd/yyyy)</label>
                               <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`children.${index}.date_of_birth`)} />
-                            </div>
-                            <div className="form-group">
-                              <label className="form-label">Residence (Valid options include: resides with me, does not reside with me, or unknown/missing)</label>
+                  </div>
+                  <div className="form-group">
+                              <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                                Residence
+                                <InfoIcon tooltip="Valid options include: resides with me, does not reside with me, or unknown/missing" />
+                              </label>
                               <select className="form-select" {...register(`children.${index}.residence`)}>
-                                <option value="">Select...</option>
+                      <option value="">Select...</option>
                                 <option value="resides with me">Resides with me</option>
                                 <option value="does not reside with me">Does not reside with me</option>
                                 <option value="unknown/missing">Unknown/Missing</option>
-                              </select>
-                            </div>
-                            <div className="form-group">
-                              <label className="form-label">Relationship (Valid options include: biological son or daughter, stepchild, or legally adopted son or daughter)</label>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                              <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                                Relationship
+                                <InfoIcon tooltip="Valid options include: biological son or daughter, stepchild, or legally adopted son or daughter" />
+                              </label>
                               <select className="form-select" {...register(`children.${index}.relationship`)}>
                                 <option value="">Select...</option>
                                 <option value="biological son or daughter">Biological son or daughter</option>
                                 <option value="stepchild">Stepchild</option>
                                 <option value="legally adopted son or daughter">Legally adopted son or daughter</option>
                               </select>
-                            </div>
-                          </div>
+                  </div>
+                </div>
                         </div>
                       ))}
                     </div>
                     
                     {watchedData.eligibility_basis === "qualified_employment" && (
                       <div style={{ marginTop: "16px" }}>
-                        <YesNoField name="providing_support_for_children" label="Only answer Item Number 8. if you are filing under Part 1., Item Number 1.d., Spouse of U.S. Citizen in Qualified Employment Outside the United States. Are you providing support for your son or daughter?" />
+                        <YesNoField 
+                          name="providing_support_for_children" 
+                          label="Are you providing support for your son or daughter?" 
+                          tooltip="Only answer Item Number 8. if you are filing under Part 1., Item Number 1.d., Spouse of U.S. Citizen in Qualified Employment Outside the United States."
+                        />
                       </div>
                     )}
                   </div>
@@ -2041,56 +2146,56 @@ export default function N400Form() {
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>General Eligibility</h3>
-                  <YesNoField name="q_claimed_us_citizen" label="Have you EVER claimed to be a U.S. citizen (in writing or any other way)?" />
-                  <YesNoField name="q_voted_in_us" label="Have you EVER registered to vote or voted in any Federal, state, or local election in the United States? If you lawfully voted only in a local election where aliens are eligible to vote, you may answer 'No.'" />
-                  <YesNoField name="q_failed_to_file_taxes" label="Have you EVER failed to file a Federal, state, or local tax return since you became a lawful permanent resident?" />
-                  <YesNoField name="q_nonresident_alien_tax" label="Since you became a lawful permanent resident, have you called yourself a 'nonresident alien' on a Federal, state, or local tax return or decided not to file a tax return because you considered yourself to be a nonresident?" />
-                  <YesNoField name="q_owe_taxes" label="Do you currently owe any overdue Federal, state, or local taxes in the United States?" />
+                  <YesNoField name="q_claimed_us_citizen" label="Have you ever claimed to be a U.S. citizen?" tooltip="Have you EVER claimed to be a U.S. citizen (in writing or any other way)?" />
+                  <YesNoField name="q_voted_in_us" label="Have you ever registered to vote or voted in a U.S. election?" tooltip="Have you EVER registered to vote or voted in any Federal, state, or local election in the United States? If you lawfully voted only in a local election where aliens are eligible to vote, you may answer 'No.'" />
+                  <YesNoField name="q_failed_to_file_taxes" label="Have you ever failed to file a tax return?" tooltip="Have you EVER failed to file a Federal, state, or local tax return since you became a lawful permanent resident?" />
+                  <YesNoField name="q_nonresident_alien_tax" label="Did you call yourself a 'nonresident alien' on a tax return?" tooltip="Since you became a lawful permanent resident, have you called yourself a 'nonresident alien' on a Federal, state, or local tax return or decided not to file a tax return because you considered yourself to be a nonresident?" />
+                  <YesNoField name="q_owe_taxes" label="Do you currently owe overdue taxes?" tooltip="Do you currently owe any overdue Federal, state, or local taxes in the United States?" />
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Affiliations and Associations</h3>
-                  <YesNoField name="q_communist_party" label="Have you EVER been a member of, involved in, or in any way associated with any Communist or totalitarian party anywhere in the world?" />
-                  <YesNoField name="q_advocated_overthrow" label="Have you EVER advocated (supported and promoted) the overthrow by force or violence or other unconstitutional means of the Government of the United States or all forms of law, opposition to all organized government, world communism, the establishment in the United States of a totalitarian dictatorship, or been a member of, involved in, or in any way associated with any group anywhere in the world that advocated any of the following?" />
-                  <YesNoField name="q_terrorist_org" label="Have you EVER been a member of, involved in, or in any way associated with, or have you EVER provided money, a thing of value, services or labor, or any other assistance or support to a group that used a weapon against any person, or threatened to do so?" />
+                  <YesNoField name="q_communist_party" label="Have you ever been associated with a Communist or totalitarian party?" tooltip="Have you EVER been a member of, involved in, or in any way associated with any Communist or totalitarian party anywhere in the world?" />
+                  <YesNoField name="q_advocated_overthrow" label="Have you ever advocated the overthrow of the U.S. government?" tooltip="Have you EVER advocated (supported and promoted) the overthrow by force or violence or other unconstitutional means of the Government of the United States or all forms of law, opposition to all organized government, world communism, the establishment in the United States of a totalitarian dictatorship, or been a member of, involved in, or in any way associated with any group anywhere in the world that advocated any of the following?" />
+                  <YesNoField name="q_terrorist_org" label="Have you ever been associated with or supported a terrorist organization?" tooltip="Have you EVER been a member of, involved in, or in any way associated with, or have you EVER provided money, a thing of value, services or labor, or any other assistance or support to a group that used a weapon against any person, or threatened to do so?" />
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Violence and Harm</h3>
-                  <YesNoField name="q_used_weapon_explosive" label="Have you EVER used a weapon or explosive with intent to harm another person or cause damage to property?" />
-                  <YesNoField name="q_kidnapping_assassination_hijacking" label="Have you EVER engaged (participated) in kidnapping, assassination, or hijacking or sabotage of an airplane, ship, vehicle, or other mode of transportation?" />
-                  <YesNoField name="q_threatened_weapon_violence" label="Have you EVER threatened, attempted (tried), conspired (planned with others), prepared, planned, advocated for, or incited (encouraged) others to commit any of the acts listed above?" />
-                  <YesNoField name="q_genocide" label="Have you EVER ordered, incited, called for, committed, assisted, helped with, or otherwise participated in genocide?" />
-                  <YesNoField name="q_torture" label="Have you EVER ordered, incited, called for, committed, assisted, helped with, or otherwise participated in torture?" />
-                  <YesNoField name="q_killing_person" label="Have you EVER ordered, incited, called for, committed, assisted, helped with, or otherwise participated in killing or trying to kill any person?" />
-                  <YesNoField name="q_sexual_contact_nonconsent" label="Have you EVER had any kind of sexual contact or activity with any person who did not consent (did not agree) or was unable to consent (could not agree), or was being forced or threatened by you or by someone else?" />
-                  <YesNoField name="q_severely_injuring" label="Have you EVER intentionally and severely injuring or trying to injure any person?" />
-                  <YesNoField name="q_religious_persecution" label="Have you EVER not let someone practice his or her religion?" />
-                  <YesNoField name="q_harm_race_religion" label="Have you EVER caused harm or suffering to any person because of his or her race, religion, national origin, membership in a particular social group, or political opinion?" />
+                  <YesNoField name="q_used_weapon_explosive" label="Have you ever used a weapon or explosive to harm someone or damage property?" tooltip="Have you EVER used a weapon or explosive with intent to harm another person or cause damage to property?" />
+                  <YesNoField name="q_kidnapping_assassination_hijacking" label="Have you ever engaged in kidnapping, assassination, or hijacking?" tooltip="Have you EVER engaged (participated) in kidnapping, assassination, or hijacking or sabotage of an airplane, ship, vehicle, or other mode of transportation?" />
+                  <YesNoField name="q_threatened_weapon_violence" label="Have you ever threatened or planned violence with weapons?" tooltip="Have you EVER threatened, attempted (tried), conspired (planned with others), prepared, planned, advocated for, or incited (encouraged) others to commit any of the acts listed above?" />
+                  <YesNoField name="q_genocide" label="Have you ever participated in genocide?" tooltip="Have you EVER ordered, incited, called for, committed, assisted, helped with, or otherwise participated in genocide?" />
+                  <YesNoField name="q_torture" label="Have you ever participated in torture?" tooltip="Have you EVER ordered, incited, called for, committed, assisted, helped with, or otherwise participated in torture?" />
+                  <YesNoField name="q_killing_person" label="Have you ever participated in killing or trying to kill someone?" tooltip="Have you EVER ordered, incited, called for, committed, assisted, helped with, or otherwise participated in killing or trying to kill any person?" />
+                  <YesNoField name="q_sexual_contact_nonconsent" label="Have you ever had non-consensual sexual contact?" tooltip="Have you EVER had any kind of sexual contact or activity with any person who did not consent (did not agree) or was unable to consent (could not agree), or was being forced or threatened by you or by someone else?" />
+                  <YesNoField name="q_severely_injuring" label="Have you ever intentionally and severely injured someone?" tooltip="Have you EVER intentionally and severely injuring or trying to injure any person?" />
+                  <YesNoField name="q_religious_persecution" label="Have you ever prevented someone from practicing their religion?" tooltip="Have you EVER not let someone practice his or her religion?" />
+                  <YesNoField name="q_harm_race_religion" label="Have you ever harmed someone because of their race, religion, or political opinion?" tooltip="Have you EVER caused harm or suffering to any person because of his or her race, religion, national origin, membership in a particular social group, or political opinion?" />
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Military and Police Service</h3>
-                  <YesNoField name="q_military_police_service" label="Have you EVER served in, been a member of, assisted (helped), or participated in any military or police unit?" />
-                  <YesNoField name="q_armed_group" label="Have you EVER served in, been a member of, assisted (helped), or participated in any armed group (a group that carries weapons), for example: paramilitary unit, self-defense unit, vigilante unit, rebel group, or guerrilla group?" />
-                  <YesNoField name="q_detention_facility" label="Have you EVER worked, volunteered, or otherwise served in a place where people were detained (forced to stay), for example, a prison, jail, prison camp, detention facility, or labor camp, or have you EVER directed or participated in any other activity that involved detaining people?" />
-                  <YesNoField name="q_group_used_weapons" label="10.a. Were you EVER a part of any group, or did you EVER help any group, unit, or organization that used a weapon against any person, or threatened to do so?" />
+                  <YesNoField name="q_military_police_service" label="Have you ever served in a military or police unit?" tooltip="Have you EVER served in, been a member of, assisted (helped), or participated in any military or police unit?" />
+                  <YesNoField name="q_armed_group" label="Have you ever been part of an armed group?" tooltip="Have you EVER served in, been a member of, assisted (helped), or participated in any armed group (a group that carries weapons), for example: paramilitary unit, self-defense unit, vigilante unit, rebel group, or guerrilla group?" />
+                  <YesNoField name="q_detention_facility" label="Have you ever worked in a detention facility?" tooltip="Have you EVER worked, volunteered, or otherwise served in a place where people were detained (forced to stay), for example, a prison, jail, prison camp, detention facility, or labor camp, or have you EVER directed or participated in any other activity that involved detaining people?" />
+                  <YesNoField name="q_group_used_weapons" label="10.a. Were you ever part of a group that used weapons?" tooltip="Were you EVER a part of any group, or did you EVER help any group, unit, or organization that used a weapon against any person, or threatened to do so?" />
                   {watchedData.q_group_used_weapons === "yes" && (
                     <>
-                      <YesNoField name="q_used_weapon_against_person" label="10.b. If you answered 'Yes' to Item Number 10.a., when you were part of this group, or when you helped this group, did you ever use a weapon against another person?" />
-                      <YesNoField name="q_threatened_weapon_use" label="10.c. If you answered 'Yes' to Item Number 10.a., when you were part of this group, or when you helped this group, did you ever threaten another person that you would use a weapon against that person?" />
+                      <YesNoField name="q_used_weapon_against_person" label="10.b. Did you use a weapon against another person?" tooltip="If you answered 'Yes' to Item Number 10.a., when you were part of this group, or when you helped this group, did you ever use a weapon against another person?" />
+                      <YesNoField name="q_threatened_weapon_use" label="10.c. Did you threaten to use a weapon against another person?" tooltip="If you answered 'Yes' to Item Number 10.a., when you were part of this group, or when you helped this group, did you ever threaten another person that you would use a weapon against that person?" />
                     </>
                   )}
-                  <YesNoField name="q_weapons_training" label="Have you EVER received any weapons training, paramilitary training, or other military-type training?" />
-                  <YesNoField name="q_sold_provided_weapons" label="Have you EVER sold, provided, or transported weapons, or assisted any person in selling, providing, or transporting weapons, which you knew or believed would be used against another person?" />
-                  <YesNoField name="q_recruited_under_15" label="Have you EVER recruited (asked), enlisted (signed up), conscripted (required to join), or used any person under 15 years of age to serve in or help an armed group, or attempted or worked with others to do so?" />
-                  <YesNoField name="q_used_under_15_hostilities" label="Have you EVER used any person under 15 years of age to take part in hostilities or attempted or worked with others to do so? This could include participating in combat or providing services related to combat (such as serving as a messenger or transporting supplies)." />
+                  <YesNoField name="q_weapons_training" label="Have you ever received weapons or military training?" tooltip="Have you EVER received any weapons training, paramilitary training, or other military-type training?" />
+                  <YesNoField name="q_sold_provided_weapons" label="Have you ever sold or provided weapons?" tooltip="Have you EVER sold, provided, or transported weapons, or assisted any person in selling, providing, or transporting weapons, which you knew or believed would be used against another person?" />
+                  <YesNoField name="q_recruited_under_15" label="Have you ever recruited someone under 15 for an armed group?" tooltip="Have you EVER recruited (asked), enlisted (signed up), conscripted (required to join), or used any person under 15 years of age to serve in or help an armed group, or attempted or worked with others to do so?" />
+                  <YesNoField name="q_used_under_15_hostilities" label="Have you ever used someone under 15 in hostilities?" tooltip="Have you EVER used any person under 15 years of age to take part in hostilities or attempted or worked with others to do so? This could include participating in combat or providing services related to combat (such as serving as a messenger or transporting supplies)." />
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Crimes and Offenses</h3>
-                  <YesNoField name="q_committed_crime_not_arrested" label="15.a. Have you EVER committed, agreed to commit, asked someone else to commit, helped commit, or tried to commit a crime or offense for which you were NOT arrested?" />
-                  <YesNoField name="q_arrested" label="15.b. Have you EVER been arrested, cited, detained or confined by any law enforcement officer, military official (in the U.S. or elsewhere), or immigration official for any reason, or been charged with a crime or offense?" />
+                  <YesNoField name="q_committed_crime_not_arrested" label="15.a. Have you ever committed a crime for which you were not arrested?" tooltip="Have you EVER committed, agreed to commit, asked someone else to commit, helped commit, or tried to commit a crime or offense for which you were NOT arrested?" />
+                  <YesNoField name="q_arrested" label="15.b. Have you ever been arrested, cited, or detained?" tooltip="Have you EVER been arrested, cited, detained or confined by any law enforcement officer, military official (in the U.S. or elsewhere), or immigration official for any reason, or been charged with a crime or offense?" />
                   
                   {(watchedData.q_committed_crime_not_arrested === "yes" || watchedData.q_arrested === "yes") && (
                     <div className="form-group" style={{ marginTop: "16px" }}>
@@ -2182,37 +2287,37 @@ export default function N400Form() {
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Moral Character</h3>
-                  <YesNoField name="q_prostitution" label="Have you EVER engaged in prostitution, attempted to procure or import prostitutes or persons for the purpose of prostitution, or received any proceeds or money from prostitution?" />
-                  <YesNoField name="q_controlled_substances" label="Have you EVER manufactured, cultivated, produced, distributed, dispensed, sold, or smuggled (trafficked) any controlled substances, illegal drugs, narcotics, or drug paraphernalia in violation of any law or regulation of a U.S. state, the United States, or a foreign country?" />
-                  <YesNoField name="q_marriage_fraud" label="Have you EVER married someone in order to obtain an immigration benefit?" />
-                  <YesNoField name="q_polygamy" label="Have you EVER been married to more than one person at the same time?" />
-                  <YesNoField name="q_helped_illegal_entry" label="Have you EVER helped anyone to enter, or try to enter, the United States illegally?" />
-                  <YesNoField name="q_illegal_gambling" label="Have you EVER gambled illegally or received income from illegal gambling?" />
-                  <YesNoField name="q_failed_child_support" label="Have you EVER failed to support your dependents (pay child support) or to pay alimony (court-ordered financial support after divorce or separation)?" />
-                  <YesNoField name="q_misrepresentation_public_benefits" label="Have you EVER made any misrepresentation to obtain any public benefit in the United States?" />
-                  <YesNoField name="q_habitual_drunkard" label="Have you EVER been a habitual drunkard?" />
+                  <YesNoField name="q_prostitution" label="Have you ever engaged in prostitution?" tooltip="Have you EVER engaged in prostitution, attempted to procure or import prostitutes or persons for the purpose of prostitution, or received any proceeds or money from prostitution?" />
+                  <YesNoField name="q_controlled_substances" label="Have you ever sold or trafficked controlled substances?" tooltip="Have you EVER manufactured, cultivated, produced, distributed, dispensed, sold, or smuggled (trafficked) any controlled substances, illegal drugs, narcotics, or drug paraphernalia in violation of any law or regulation of a U.S. state, the United States, or a foreign country?" />
+                  <YesNoField name="q_marriage_fraud" label="Have you ever married someone to obtain an immigration benefit?" tooltip="Have you EVER married someone in order to obtain an immigration benefit?" />
+                  <YesNoField name="q_polygamy" label="Have you ever been married to more than one person at the same time?" />
+                  <YesNoField name="q_helped_illegal_entry" label="Have you ever helped someone enter the U.S. illegally?" tooltip="Have you EVER helped anyone to enter, or try to enter, the United States illegally?" />
+                  <YesNoField name="q_illegal_gambling" label="Have you ever gambled illegally or received income from illegal gambling?" />
+                  <YesNoField name="q_failed_child_support" label="Have you ever failed to pay child support or alimony?" tooltip="Have you EVER failed to support your dependents (pay child support) or to pay alimony (court-ordered financial support after divorce or separation)?" />
+                  <YesNoField name="q_misrepresentation_public_benefits" label="Have you ever misrepresented information to obtain public benefits?" tooltip="Have you EVER made any misrepresentation to obtain any public benefit in the United States?" />
+                  <YesNoField name="q_habitual_drunkard" label="Have you ever been a habitual drunkard?" />
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Immigration Violations</h3>
-                  <YesNoField name="q_false_info_us_government" label="Have you EVER given any U.S. Government officials any information or documentation that was false, fraudulent, or misleading?" />
-                  <YesNoField name="q_lied_us_government" label="Have you EVER lied to any U.S. Government officials to gain entry or admission into the United States or to gain immigration benefits while in the United States?" />
-                  <YesNoField name="q_removed_deported" label="Have you EVER been removed or deported from the United States?" />
-                  <YesNoField name="q_removal_proceedings" label="Have you EVER been placed in removal, rescission, or deportation proceedings?" />
+                  <YesNoField name="q_false_info_us_government" label="Have you ever given false information to U.S. government officials?" tooltip="Have you EVER given any U.S. Government officials any information or documentation that was false, fraudulent, or misleading?" />
+                  <YesNoField name="q_lied_us_government" label="Have you ever lied to U.S. government officials?" tooltip="Have you EVER lied to any U.S. Government officials to gain entry or admission into the United States or to gain immigration benefits while in the United States?" />
+                  <YesNoField name="q_removed_deported" label="Have you ever been removed or deported from the U.S.?" />
+                  <YesNoField name="q_removal_proceedings" label="Have you ever been placed in removal or deportation proceedings?" />
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Selective Service</h3>
-                  <YesNoField name="q_male_18_26_lived_us" label="Are you a male who lived in the United States at any time between your 18th and 26th birthdays? (Do not select 'Yes' if you were a lawful nonimmigrant for all of that time period.)" />
+                  <YesNoField name="q_male_18_26_lived_us" label="Are you a male who lived in the U.S. between ages 18-26?" tooltip="Are you a male who lived in the United States at any time between your 18th and 26th birthdays? (Do not select 'Yes' if you were a lawful nonimmigrant for all of that time period.)" />
                   {watchedData.q_male_18_26_lived_us === "yes" && (
                     <>
                       <YesNoField name="q_registered_selective_service" label="Did you register for the Selective Service?" />
                       {watchedData.q_registered_selective_service === "yes" && (
                         <div className="form-row-equal" style={{ marginTop: "10px" }}>
-                          <div className="form-group">
+                <div className="form-group">
                             <label className="form-label">Selective Service Number</label>
                             <input type="text" className="form-input" {...register("selective_service_number")} />
-                          </div>
+                </div>
                           <div className="form-group">
                             <label className="form-label">Date Registered</label>
                             <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("selective_service_date")} />
@@ -2225,9 +2330,9 @@ export default function N400Form() {
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Military Service</h3>
-                  <YesNoField name="q_left_us_avoid_draft" label="23. Have you EVER left the United States to avoid being drafted in the U.S. armed forces?" />
-                  <YesNoField name="q_applied_military_exemption" label="24. Have you EVER applied for any kind of exemption from military service in the U.S. armed forces?" />
-                  <YesNoField name="q_served_us_military" label="25. Have you EVER served in the U.S. armed forces?" />
+                  <YesNoField name="q_left_us_avoid_draft" label="23. Did you leave the U.S. to avoid being drafted?" />
+                  <YesNoField name="q_applied_military_exemption" label="24. Have you ever applied for a military service exemption?" />
+                  <YesNoField name="q_served_us_military" label="25. Have you ever served in the U.S. armed forces?" />
                   
                   {/* Items 26-29 only show if Item 25 is "yes" */}
                   {watchedData.q_served_us_military === "yes" && (
@@ -2235,56 +2340,51 @@ export default function N400Form() {
                       <YesNoField name="q_current_military_member" label="26.a. Are you currently a member of the U.S. armed forces?" />
                       {watchedData.q_current_military_member === "yes" && (
                         <>
-                          <YesNoField name="q_scheduled_deploy" label="26.b. Are you scheduled to deploy outside the United States, including to a vessel, within the next 3 months?" />
-                          <YesNoField name="q_stationed_outside_us" label="26.c. Are you currently stationed outside the United States?" />
+                          <YesNoField name="q_scheduled_deploy" label="26.b. Are you scheduled to deploy outside the U.S. within 3 months?" tooltip="Are you scheduled to deploy outside the United States, including to a vessel, within the next 3 months? (Call the Military Help Line at 877-247-4645 if you transfer to a new duty station after you file your Form N-400, including if you are deployed outside the United States or to a vessel.)" />
+                          <YesNoField name="q_stationed_outside_us" label="26.c. Are you currently stationed outside the U.S.?" />
                         </>
                       )}
                       {watchedData.q_current_military_member === "no" && (
-                        <YesNoField name="q_former_military_outside_us" label="26.d. Are you a former U.S. military service member who is currently residing outside of the U.S.?" />
+                        <YesNoField name="q_former_military_outside_us" label="26.d. Are you a former military member living outside the U.S.?" />
                       )}
-                      <YesNoField name="q_discharged_because_alien" label="27. Have you EVER been discharged from training or service in the U.S. armed forces because you were an alien?" />
-                      <YesNoField name="q_court_martialed" label="28. Have you EVER been court-martialed or have you received a discharge characterized as other than honorable, bad conduct, or dishonorable, while in the U.S. armed forces?" />
-                      <YesNoField name="q_deserted_military" label="29. Have you EVER deserted from the U.S. armed forces?" />
+                      <YesNoField name="q_discharged_because_alien" label="27. Were you discharged because you were an alien?" tooltip="Have you EVER been discharged from training or service in the U.S. armed forces because you were an alien?" />
+                      <YesNoField name="q_court_martialed" label="28. Were you court-martialed or received a dishonorable discharge?" tooltip="Have you EVER been court-martialed or have you received a discharge characterized as other than honorable, bad conduct, or dishonorable, while in the U.S. armed forces?" />
+                      <YesNoField name="q_deserted_military" label="29. Have you ever deserted from the U.S. armed forces?" />
                     </>
                   )}
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Title of Nobility</h3>
-                  <YesNoField name="q_title_of_nobility" label="30.a. Do you now have, or did you EVER have, a hereditary title or an order of nobility in any foreign country?" />
+                  <YesNoField name="q_title_of_nobility" label="30.a. Do you have or have you ever had a hereditary title or order of nobility?" tooltip="Do you now have, or did you EVER have, a hereditary title or an order of nobility in any foreign country?" />
                   {watchedData.q_title_of_nobility === "yes" && (
                     <>
-                      <YesNoField name="q_willing_to_give_up_titles" label="30.b. If you answered 'Yes' to Item Number 30.a., are you willing to give up any inherited titles or orders of nobility, that you have in a foreign country at your naturalization ceremony?" />
+                      <YesNoField name="q_willing_to_give_up_titles" label="30.b. Are you willing to give up your titles at your naturalization ceremony?" tooltip="If you answered 'Yes' to Item Number 30.a., are you willing to give up any inherited titles or orders of nobility, that you have in a foreign country at your naturalization ceremony?" />
                       {/* USCIS requires listing titles regardless of willingness to give them up */}
                       <div className="form-group" style={{ marginTop: "10px" }}>
                         <label className="form-label">List all titles and orders of nobility:</label>
                         <textarea className="form-input" rows={3} placeholder="List each title on a separate line" {...register("q_titles_list")} />
                         <p className="helper-text" style={{ fontSize: "13px", marginTop: "4px" }}>
                           You must list all titles and orders of nobility, regardless of whether you are willing to give them up.
-                        </p>
-                      </div>
+                    </p>
+                  </div>
                     </>
                   )}
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Oath of Allegiance</h3>
-                  <YesNoField name="q_support_constitution" label="31. Do you support the Constitution and form of Government of the United States?" />
-                  <YesNoField name="q_understand_oath" label="32. Do you understand the full Oath of Allegiance to the United States (see Part 16. Oath of Allegiance)?" />
-                  <YesNoField name="q_unable_oath_disability" label="33. Are you unable to take the Oath of Allegiance because of a physical or developmental disability or mental impairment?" />
-                  {watchedData.q_unable_oath_disability === "yes" && (
-                    <p className="helper-text" style={{ marginTop: "-10px" }}>
-                      If you answer "Yes," skip Item Numbers 34. - 37. and see the Legal Guardian, Surrogate, or Designated Representative section in the Instructions.
-                    </p>
-                  )}
+                  <YesNoField name="q_support_constitution" label="31. Do you support the U.S. Constitution and form of government?" />
+                  <YesNoField name="q_understand_oath" label="32. Do you understand the full Oath of Allegiance?" tooltip="Do you understand the full Oath of Allegiance to the United States (see Part 16. Oath of Allegiance)?" />
+                  <YesNoField name="q_unable_oath_disability" label="33. Are you unable to take the Oath due to a disability?" tooltip="Are you unable to take the Oath of Allegiance because of a physical or developmental disability or mental impairment? If you answer 'Yes,' skip Item Numbers 34. - 37. and see the Legal Guardian, Surrogate, or Designated Representative section in the Instructions." />
                   {watchedData.q_unable_oath_disability === "no" && (
                     <>
-                      <YesNoField name="q_willing_take_oath" label="34. Are you willing to take the full Oath of Allegiance to the United States?" />
-                      <YesNoField name="q_willing_bear_arms" label="35. If the law requires it, are you willing to bear arms (carry weapons) on behalf of the United States?" />
-                      <YesNoField name="q_willing_noncombatant" label="36. If the law requires it, are you willing to perform noncombatant services (do something that does not include fighting in a war) in the U.S. armed forces?" />
-                      <YesNoField name="q_willing_work_national_importance" label="37. If the law requires it, are you willing to perform work of national importance under civilian direction (do non-military work that the U.S. Government says is important to the country)?" />
-                      <p className="helper-text" style={{ marginTop: "-10px" }}>
-                        If you answer "'No" to any question except Item Number 33., see the Oath of Allegiance section of the Instructions for more information.
+                      <YesNoField name="q_willing_take_oath" label="34. Are you willing to take the full Oath of Allegiance?" />
+                      <YesNoField name="q_willing_bear_arms" label="35. Are you willing to bear arms if required by law?" tooltip="If the law requires it, are you willing to bear arms (carry weapons) on behalf of the United States?" />
+                      <YesNoField name="q_willing_noncombatant" label="36. Are you willing to perform noncombatant services if required?" tooltip="If the law requires it, are you willing to perform noncombatant services (do something that does not include fighting in a war) in the U.S. armed forces?" />
+                      <YesNoField name="q_willing_work_national_importance" label="37. Are you willing to perform work of national importance if required?" tooltip="If the law requires it, are you willing to perform work of national importance under civilian direction (do non-military work that the U.S. Government says is important to the country)?" />
+                      <p className="helper-text" style={{ marginTop: "-10px", fontSize: "13px" }}>
+                        If you answer "No" to any question except Item Number 33., see the Oath of Allegiance section of the Instructions for more information.
                       </p>
                     </>
                   )}
@@ -2301,7 +2401,11 @@ export default function N400Form() {
                   For information about fees, fee waivers, and reduced fees, see Form G-1055, Fee Schedule, at www.uscis.gov/g-1055. To apply for a reduced fee, complete Item Numbers 1. - 5.b. If you are not eligible for a reduced fee, complete Item Number 1. and proceed to Part 11.
                 </p>
 
-                <YesNoField name="fee_reduction_requested" label="1. My household income is less than or equal to 400% of the Federal Poverty Guidelines (see Instructions for required documentation)." />
+                <YesNoField 
+                  name="fee_reduction_requested" 
+                  label="1. Do you qualify for a fee reduction?" 
+                  tooltip="My household income is less than or equal to 400% of the Federal Poverty Guidelines (see Instructions for required documentation)."
+                />
                 
                 {watchedData.fee_reduction_requested === "yes" && (
                   <>
@@ -2310,23 +2414,23 @@ export default function N400Form() {
                       <input type="text" className="form-input" placeholder="$0.00" style={{ maxWidth: "200px" }} {...register("household_income")} />
                     </div>
 
-                    <div className="form-group">
+                <div className="form-group">
                       <label className="form-label">3. My household size is:</label>
                       <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("household_size")} />
-                    </div>
+                </div>
 
-                    <div className="form-group">
+                  <div className="form-group">
                       <label className="form-label">4. Total number of household members earning income including yourself:</label>
                       <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("household_income_earners")} />
                     </div>
 
-                    <YesNoField name="is_head_of_household" label="5.a. I am the head of household." />
+                    <YesNoField name="is_head_of_household" label="5.a. Are you the head of household?" />
                     
                     {watchedData.is_head_of_household === "no" && (
                       <div className="form-group" style={{ marginTop: "10px" }}>
                         <label className="form-label">5.b. Name of head of household (if you selected 'No' in Item Number 5.a.):</label>
                         <input type="text" className="form-input" placeholder="Full name" {...register("head_of_household_name")} />
-                      </div>
+                  </div>
                     )}
                   </>
                 )}
@@ -2342,22 +2446,22 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 12 && (
               <>
-                <div className="form-group">
+                      <div className="form-group">
                   <label className="form-label">1. Applicant's Daytime Telephone Number</label>
                   <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("daytime_phone")} />
                   {errors.daytime_phone && <p className="error-message">{errors.daytime_phone.message}</p>}
-                </div>
+                      </div>
 
-                <div className="form-group">
+                      <div className="form-group">
                   <label className="form-label">2. Applicant's Mobile Telephone Number (if any)</label>
                   <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("mobile_phone")} />
-                </div>
+                      </div>
 
-                <div className="form-group">
+                      <div className="form-group">
                   <label className="form-label">3. Applicant's Email Address (if any)</label>
                   <input type="email" className="form-input" placeholder="you@example.com" {...register("email")} />
                   {errors.email && <p className="error-message">{errors.email.message}</p>}
-                </div>
+                    </div>
 
                 <div className="form-group" style={{ marginTop: "32px" }}>
                   <label className="form-label">4. Applicant's Certification and Signature</label>
@@ -2392,7 +2496,7 @@ export default function N400Form() {
                   <>
                     <div className="form-group" style={{ marginTop: "20px" }}>
                       <label className="form-label">Interpreter's Full Name</label>
-                      <div className="form-row-equal">
+                    <div className="form-row-equal">
                         <div>
                           <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Interpreter's Family Name (Last Name)</label>
                           <input type="text" className="form-input" {...register("interpreter_last_name")} />
@@ -2404,10 +2508,10 @@ export default function N400Form() {
                       </div>
                     </div>
 
-                    <div className="form-group">
+                      <div className="form-group">
                       <label className="form-label">2. Interpreter's Business or Organization Name</label>
                       <input type="text" className="form-input" {...register("interpreter_business_name")} />
-                    </div>
+                      </div>
 
                     <div className="form-row-equal">
                       <div className="form-group">
@@ -2440,7 +2544,7 @@ export default function N400Form() {
                           <div className="form-group">
                             <label className="form-label">Interpreter's Signature</label>
                             <input type="text" className="form-input" placeholder="Type interpreter's full name" {...register("interpreter_signature")} />
-                          </div>
+                  </div>
                           <div className="form-group">
                             <label className="form-label">Date of Signature (mm/dd/yyyy)</label>
                             <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("interpreter_signature_date")} />
@@ -2480,10 +2584,10 @@ export default function N400Form() {
                       </div>
                     </div>
 
-                    <div className="form-group">
+                <div className="form-group">
                       <label className="form-label">2. Preparer's Business or Organization Name</label>
                       <input type="text" className="form-input" {...register("preparer_business_name")} />
-                    </div>
+                </div>
 
                     <div className="form-row-equal">
                       <div className="form-group">
@@ -2511,7 +2615,7 @@ export default function N400Form() {
                           <div className="form-group">
                             <label className="form-label">Preparer's Signature</label>
                             <input type="text" className="form-input" placeholder="Type preparer's full name" {...register("preparer_signature")} />
-                          </div>
+                  </div>
                           <div className="form-group">
                             <label className="form-label">Date of Signature (mm/dd/yyyy)</label>
                             <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("preparer_signature_date")} />
@@ -2544,7 +2648,7 @@ export default function N400Form() {
                   </p>
                   
                   {/* Additional information array */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                     {additionalFields.length === 0 && (
                       <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
                         <p style={{ fontSize: "14px", color: "var(--gray)", marginBottom: "12px" }}>No additional information entries yet. Click "Add Entry" to begin.</p>
