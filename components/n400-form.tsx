@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { HelpCircle, Plus, Trash2 } from "lucide-react";
 import { submitN400Form } from "@/app/actions/n400-form";
+import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 // Comprehensive Zod validation schema for N-400
 const n400Schema = z.object({
@@ -469,11 +471,322 @@ const RACES = [
 const EYE_COLORS = ["Black", "Blue", "Brown", "Gray", "Green", "Hazel", "Maroon", "Pink", "Unknown"];
 const HAIR_COLORS = ["Bald", "Black", "Blond", "Brown", "Gray", "Red", "Sandy", "White", "Unknown"];
 
+const DEFAULT_FORM_VALUES: FormData = {
+  // Part 1 - Eligibility
+  eligibility_basis: "5year",
+  other_basis_reason: "N/A",
+  uscis_field_office: "San Francisco Field Office",
+
+  // Part 2 - Identity
+  first_name: "Maria",
+  middle_name: "Elena",
+  last_name: "Rodriguez",
+  wants_name_change: "yes",
+  new_name_first: "Maria",
+  new_name_middle: "Elena",
+  new_name_last: "Santos",
+  has_used_other_names: "yes",
+  other_names: [
+    {
+      family_name: "Hernandez",
+      given_name: "Maria",
+      middle_name: "Elena",
+    },
+  ],
+  date_of_birth: "03/15/1985",
+  country_of_birth: "Mexico",
+  country_of_citizenship: "Mexico",
+  gender: "female",
+  parent_us_citizen_before_18: "no",
+
+  // Identification Numbers
+  a_number: "A123456789",
+  uscis_account_number: "1234-5678-9012",
+  ssn: "123-45-6789",
+  ssa_wants_card: "yes",
+  ssa_consent_disclosure: "yes",
+
+  // Green Card Information
+  date_became_permanent_resident: "06/20/2019",
+
+  // Disability Accommodations
+  request_disability_accommodations: "no",
+
+  // Part 4 - Contact
+  daytime_phone: "555-123-4567",
+  mobile_phone: "555-987-6543",
+  email: "maria.rodriguez@email.com",
+
+  // Part 5 - Residence
+  residence_addresses: [
+    {
+      street_address: "1234 Oak Street",
+      apt_ste_flr: "Apt 4B",
+      city: "San Francisco",
+      state: "CA",
+      zip_code: "94102",
+      country: "United States",
+      province: "",
+      postal_code: "",
+      dates_from: "01/2021",
+      dates_to: "Present",
+    },
+    {
+      street_address: "88 Mission St",
+      apt_ste_flr: "Unit 12",
+      city: "San Jose",
+      state: "CA",
+      zip_code: "95112",
+      country: "United States",
+      province: "",
+      postal_code: "",
+      dates_from: "02/2018",
+      dates_to: "12/2020",
+    },
+  ],
+  street_address: "1234 Oak Street",
+  apt_ste_flr: "Apt 4B",
+  city: "San Francisco",
+  state: "CA",
+  zip_code: "94102",
+  residence_from: "01/2021",
+  residence_to: "Present",
+  mailing_same_as_residence: "yes",
+  mailing_street_address: "1234 Oak Street",
+  mailing_apt_ste_flr: "Apt 4B",
+  mailing_in_care_of: "",
+  mailing_city: "San Francisco",
+  mailing_state: "CA",
+  mailing_zip_code: "94102",
+
+  // Part 7 - Biographic
+  ethnicity: "hispanic",
+  race: "white",
+  height_feet: "5",
+  height_inches: "6",
+  weight: "135",
+  eye_color: "Brown",
+  hair_color: "Black",
+
+  // Part 8 - Employment
+  employment_history: [
+    {
+      employer_or_school: "Tech Solutions Inc.",
+      occupation_or_field: "Software Engineer",
+      city: "San Francisco",
+      state: "CA",
+      zip_code: "94102",
+      country: "United States",
+      province: "",
+      postal_code: "",
+      dates_from: "03/2020",
+      dates_to: "Present",
+    },
+    {
+      employer_or_school: "Bay Area College",
+      occupation_or_field: "Student",
+      city: "San Jose",
+      state: "CA",
+      zip_code: "95112",
+      country: "United States",
+      province: "",
+      postal_code: "",
+      dates_from: "08/2016",
+      dates_to: "02/2020",
+    },
+  ],
+  current_employer: "Tech Solutions Inc.",
+  current_occupation: "Software Engineer",
+  employer_city: "San Francisco",
+  employer_state: "CA",
+  employer_zip_code: "94102",
+  employment_from: "03/2020",
+  employment_to: "Present",
+
+  // Part 9 - Travel
+  trips: [
+    { date_left_us: "06/10/2022", date_returned_us: "06/20/2022", countries_traveled: "Mexico" },
+    { date_left_us: "12/05/2021", date_returned_us: "12/15/2021", countries_traveled: "Canada" },
+    { date_left_us: "08/01/2020", date_returned_us: "08/20/2020", countries_traveled: "Spain" },
+  ],
+  total_days_outside_us: "45",
+  trips_over_6_months: "no",
+
+  // Part 10 - Marital
+  marital_status: "married",
+  times_married: "1",
+  spouse_is_military_member: "no",
+  spouse_first_name: "Carlos",
+  spouse_middle_name: "Antonio",
+  spouse_last_name: "Rodriguez",
+  spouse_date_of_birth: "07/22/1983",
+  spouse_date_of_marriage: "09/15/2010",
+  spouse_is_us_citizen: "yes",
+  spouse_citizenship_by_birth: "no",
+  spouse_date_became_citizen: "03/12/2015",
+  spouse_address_same_as_applicant: "yes",
+  spouse_a_number: "A987654321",
+  spouse_times_married: "1",
+  spouse_country_of_birth: "Mexico",
+  spouse_current_employer: "City Hospital",
+
+  // Part 11 - Children
+  total_children: "2",
+  children: [
+    {
+      first_name: "Sofia",
+      last_name: "Rodriguez",
+      date_of_birth: "05/10/2012",
+      residence: "resides with me",
+      relationship: "biological son or daughter",
+    },
+    {
+      first_name: "Diego",
+      last_name: "Rodriguez",
+      date_of_birth: "11/03/2015",
+      residence: "resides with me",
+      relationship: "biological son or daughter",
+    },
+  ],
+  providing_support_for_children: "yes",
+
+  // Part 12 - Background (defaults to "no")
+  q_claimed_us_citizen: "no",
+  q_voted_in_us: "no",
+  q_failed_to_file_taxes: "no",
+  q_nonresident_alien_tax: "no",
+  q_owe_taxes: "no",
+  q_title_of_nobility: "no",
+  q_willing_to_give_up_titles: "no",
+  q_communist_party: "no",
+  q_advocated_overthrow: "no",
+  q_terrorist_org: "no",
+  q_genocide: "no",
+  q_torture: "no",
+  q_killing_person: "no",
+  q_sexual_contact_nonconsent: "no",
+  q_severely_injuring: "no",
+  q_religious_persecution: "no",
+  q_harm_race_religion: "no",
+  q_used_weapon_explosive: "no",
+  q_kidnapping_assassination_hijacking: "no",
+  q_threatened_weapon_violence: "no",
+  q_military_police_service: "no",
+  q_armed_group: "no",
+  q_detention_facility: "no",
+  q_group_used_weapons: "no",
+  q_used_weapon_against_person: "no",
+  q_threatened_weapon_use: "no",
+  q_weapons_training: "no",
+  q_sold_provided_weapons: "no",
+  q_recruited_under_15: "no",
+  q_used_under_15_hostilities: "no",
+  q_arrested: "yes",
+  q_committed_crime_not_arrested: "no",
+  crimes: [
+    {
+      date_of_crime: "02/14/2011",
+      date_of_conviction: "06/18/2011",
+      crime_description: "Minor traffic violation",
+      place_of_crime: "San Francisco, CA, USA",
+      result_disposition: "Fine paid",
+      sentence: "No jail time",
+    },
+  ],
+  q_completed_probation: "yes",
+  q_habitual_drunkard: "no",
+  q_prostitution: "no",
+  q_controlled_substances: "no",
+  q_marriage_fraud: "no",
+  q_polygamy: "no",
+  q_helped_illegal_entry: "no",
+  q_illegal_gambling: "no",
+  q_failed_child_support: "no",
+  q_misrepresentation_public_benefits: "no",
+  q_false_info_us_government: "no",
+  q_lied_us_government: "no",
+  q_removed_deported: "no",
+  q_removal_proceedings: "no",
+  q_male_18_26_lived_us: "yes",
+  q_registered_selective_service: "yes",
+  selective_service_number: "1234567890",
+  selective_service_date: "08/15/2003",
+  q_left_us_avoid_draft: "no",
+  q_applied_military_exemption: "no",
+  q_served_us_military: "no",
+  q_current_military_member: "no",
+  q_scheduled_deploy: "no",
+  q_stationed_outside_us: "no",
+  q_former_military_outside_us: "no",
+  q_discharged_because_alien: "no",
+  q_court_martialed: "no",
+  q_deserted_military: "no",
+  q_support_constitution: "yes",
+  q_understand_oath: "yes",
+  q_unable_oath_disability: "no",
+  q_willing_take_oath: "yes",
+  q_willing_bear_arms: "yes",
+  q_willing_noncombatant: "yes",
+  q_willing_work_national_importance: "yes",
+
+  // Part 10 - Fee Reduction
+  fee_reduction_requested: "yes",
+  household_income: "52000",
+  household_size: "4",
+  household_income_earners: "2",
+  is_head_of_household: "no",
+  head_of_household_name: "Carlos Rodriguez",
+
+  // Part 11 - Applicant Signature
+  applicant_signature: "Maria Rodriguez",
+  signature_date: "01/27/2026",
+
+  // Part 12 - Interpreter
+  used_interpreter: "yes",
+  interpreter_first_name: "Ana",
+  interpreter_last_name: "Lopez",
+  interpreter_business_name: "Lopez Language Services",
+  interpreter_phone: "555-222-3344",
+  interpreter_mobile: "555-222-5566",
+  interpreter_email: "ana.lopez@languageco.com",
+  interpreter_language: "Spanish",
+  interpreter_signature: "Ana Lopez",
+  interpreter_signature_date: "01/27/2026",
+
+  // Part 13 - Preparer
+  used_preparer: "yes",
+  preparer_first_name: "David",
+  preparer_last_name: "Nguyen",
+  preparer_business_name: "Immigration Prep Co.",
+  preparer_phone: "555-333-7788",
+  preparer_mobile: "555-333-9900",
+  preparer_email: "david.nguyen@immprep.com",
+  preparer_signature: "David Nguyen",
+  preparer_signature_date: "01/27/2026",
+
+  // Part 14 - Additional Information
+  additional_information: [
+    {
+      page_number: "1",
+      part_number: "14",
+      item_number: "1",
+      explanation: "Additional details provided for reference only.",
+    },
+  ],
+
+  // Missing fields
+  q_served_military_police_unit: "no",
+  q_titles_list: "N/A",
+}
+
 export default function N400Form() {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const supabase = getSupabaseBrowserClient();
 
   const {
     register,
@@ -486,98 +799,34 @@ export default function N400Form() {
   } = useForm<FormData>({
     resolver: zodResolver(n400Schema),
     mode: "onBlur",
-    defaultValues: {
-      // Part 1 - Eligibility
-      eligibility_basis: "5year",
-
-      // Part 2 - Identity
-      first_name: "Maria",
-      middle_name: "Elena",
-      last_name: "Rodriguez",
-      date_of_birth: "03/15/1985",
-      country_of_birth: "Mexico",
-      country_of_citizenship: "Mexico",
-      gender: "female",
-      has_used_other_names: "no",
-
-      // Part 2 - Immigration
-      a_number: "A123456789",
-      uscis_account_number: "",
-      ssn: "123-45-6789",
-      date_became_permanent_resident: "06/20/2019",
-      request_disability_accommodations: "no",
-
-      // Part 4 - Contact
-      daytime_phone: "555-123-4567",
-      mobile_phone: "555-987-6543",
-      email: "maria.rodriguez@email.com",
-
-      // Part 5 - Residence
-      street_address: "1234 Oak Street",
-      apt_ste_flr: "Apt 4B",
-      city: "San Francisco",
-      state: "CA",
-      zip_code: "94102",
-      residence_from: "01/2021",
-      mailing_same_as_residence: "yes",
-
-      // Part 7 - Biographic
-      ethnicity: "hispanic",
-      race: "white",
-      height_feet: "5",
-      height_inches: "6",
-      weight: "135",
-      eye_color: "Brown",
-      hair_color: "Black",
-
-      // Part 8 - Employment
-      current_employer: "Tech Solutions Inc.",
-      current_occupation: "Software Engineer",
-      employer_city: "San Francisco",
-      employer_state: "CA",
-      employment_from: "03/2020",
-
-      // Part 9 - Travel
-      total_days_outside_us: "45",
-      trips_over_6_months: "no",
-
-      // Part 10 - Marital
-      marital_status: "married",
-      times_married: "1",
-      spouse_first_name: "Carlos",
-      spouse_middle_name: "Antonio",
-      spouse_last_name: "Rodriguez",
-      spouse_date_of_birth: "07/22/1983",
-      spouse_date_of_marriage: "09/15/2010",
-      spouse_is_us_citizen: "yes",
-      spouse_country_of_birth: "Mexico",
-      spouse_current_employer: "City Hospital",
-
-      // Part 11 - Children
-      total_children: "2",
-
-      // Part 12 - Background (all "no" for sample)
-      q_claimed_us_citizen: "no",
-      q_voted_in_us: "no",
-      q_failed_to_file_taxes: "no",
-      q_owe_taxes: "no",
-      q_title_of_nobility: "no",
-      q_communist_party: "no",
-      q_terrorist_org: "no",
-      q_genocide: "no",
-      q_torture: "no",
-      q_arrested: "no",
-      q_habitual_drunkard: "no",
-      q_prostitution: "no",
-      q_illegal_gambling: "no",
-      q_failed_child_support: "no",
-      q_served_us_military: "no",
-      q_deserted_military: "no",
-    },
+    defaultValues: DEFAULT_FORM_VALUES,
   });
 
   const watchedData = watch();
   const progress = (currentStep / STEPS.length) * 100;
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadSession() {
+      const { data, error } = await supabase.auth.getSession();
+      if (!isActive) return;
+      if (error) setAuthError("Unable to verify your session. Please sign in again.");
+      setSession(data.session ?? null);
+    }
+
+    loadSession();
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!isActive) return;
+      setSession(nextSession);
+    });
+
+    return () => {
+      isActive = false;
+      subscription.subscription.unsubscribe();
+    };
+  }, [supabase]);
 
   // Field arrays for dynamic fields
   const { fields: tripFields, append: appendTrip, remove: removeTrip } = useFieldArray({
@@ -732,6 +981,12 @@ export default function N400Form() {
   };
 
   const onSubmit = async (data: FormData) => {
+    setAuthError(null);
+    if (!session?.access_token) {
+      setAuthError("Please sign in again to submit your form.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const result = await submitN400Form({
@@ -952,7 +1207,7 @@ export default function N400Form() {
         q_willing_bear_arms: data.q_willing_bear_arms,
         q_willing_noncombatant: data.q_willing_noncombatant,
         q_willing_work_national_importance: data.q_willing_work_national_importance,
-      });
+      }, session.access_token);
 
       if (result.success && result.data) {
         setSubmittedId(result.data.id || null);
@@ -966,11 +1221,20 @@ export default function N400Form() {
   };
 
   const handleDownloadPDF = async () => {
+    setAuthError(null);
+    if (!session?.access_token) {
+      setAuthError("Please sign in again to download your PDF.");
+      return;
+    }
+
     setIsDownloading(true);
     try {
       const response = await fetch("/api/generate-n400", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ formId: submittedId }),
       });
       if (response.ok) {
@@ -1106,6 +1370,7 @@ export default function N400Form() {
           <h1>{currentStepData.title}</h1>
 
           <form onSubmit={handleSubmit(onSubmit)}>
+            {authError && <p className="error-message">{authError}</p>}
             
             {/* ═══════════════════════════════════════════════════════════════ */}
             {/* STEP 1: ELIGIBILITY */}
@@ -2792,7 +3057,7 @@ export default function N400Form() {
             )}
 
             {/* Navigation Buttons */}
-            {currentStep < 12 && (
+            {currentStep < 16 && (
               <div className="button-row">
                 {currentStep > 1 && (
                   <button type="button" className="btn-back" onClick={handleBack}>← Back</button>
@@ -2803,7 +3068,7 @@ export default function N400Form() {
               </div>
             )}
 
-            {currentStep === 12 && (
+            {currentStep === 16 && (
               <div className="button-row">
                 <button type="button" className="btn-back" onClick={handleBack}>← Back</button>
                 <button type="submit" className="btn-next" disabled={isSubmitting}>

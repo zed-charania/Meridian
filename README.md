@@ -42,67 +42,27 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 Run this SQL in your Supabase SQL Editor:
 
 ```sql
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 CREATE TABLE n400_forms (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  
-  -- Eligibility
-  eligibility_basis TEXT,
-  
-  -- Personal Information
-  last_name TEXT,
-  first_name TEXT,
-  middle_name TEXT,
-  other_last_names TEXT,
-  other_first_names TEXT,
-  date_of_birth DATE,
-  country_of_birth TEXT,
-  
-  -- Contact
-  daytime_phone TEXT,
-  mobile_phone TEXT,
-  email TEXT,
-  
-  -- Physical Address
-  street_address TEXT,
-  apt_ste_flr TEXT,
-  city TEXT,
-  state TEXT,
-  zip_code TEXT,
-  
-  -- Mailing Address
-  mailing_street_address TEXT,
-  mailing_apt_ste_flr TEXT,
-  mailing_city TEXT,
-  mailing_state TEXT,
-  mailing_zip_code TEXT,
-  
-  -- Identification
-  ssn TEXT,
-  uscis_account_number TEXT,
-  a_number TEXT,
-  
-  -- Demographics
-  gender TEXT,
-  marital_status TEXT,
-  
-  -- Citizenship
-  current_citizenship TEXT,
-  
-  -- Green Card
-  green_card_number TEXT,
-  date_became_permanent_resident DATE,
-  class_of_admission TEXT,
-  
-  -- Metadata
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  payload JSONB NOT NULL,
+  status TEXT DEFAULT 'submitted',
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  status TEXT DEFAULT 'submitted'
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Enable Row Level Security
 ALTER TABLE n400_forms ENABLE ROW LEVEL SECURITY;
 
--- Create policy for service role access
+-- Allow users to read/write their own forms
+CREATE POLICY "Users can manage own forms" ON n400_forms
+  FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Service role (server actions) can do everything
 CREATE POLICY "Service role can do everything" ON n400_forms
   FOR ALL
   USING (true)

@@ -210,31 +210,78 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
 
     if data.get("zip_code"):
         fields["form1[0].#subform[2].P4_Line1_ZipCode[0]"] = data["zip_code"]
+    if data.get("residence_province"):
+        fields["form1[0].#subform[2].P4_Line1_Province[0]"] = data["residence_province"]
+    if data.get("residence_postal_code"):
+        fields["form1[0].#subform[2].P4_Line1_PostalCode[0]"] = data["residence_postal_code"]
 
     fields["form1[0].#subform[2].P4_Line1_Country[0]"] = "United States"
 
-    # Residence dates
+    # Residence dates (From / To)
+    # Template appears to place the "From" box in index [1].
     if data.get("residence_from"):
-        fields["form1[0].#subform[2].P4_Line1_DatesofResidence[0]"] = format_date(data["residence_from"])
+        fields["form1[0].#subform[2].P4_Line1_DatesofResidence[1]"] = format_date(data["residence_from"])
     if data.get("residence_to"):
         to_val = data["residence_to"]
-        if to_val.upper() != "PRESENT":
-            to_val = format_date(to_val)
-        fields["form1[0].#subform[2].P4_Line1_DatesofResidence[1]"] = to_val
+        # If "Present", leave the prefilled form value untouched
+        if isinstance(to_val, str) and to_val.upper() != "PRESENT":
+            fields["form1[0].#subform[2].P4_Line1_DatesofResidence[0]"] = format_date(to_val)
 
-    # Mailing address fields (Note: PDF does not have a "mailing same as residence" checkbox)
-    # Only fill mailing fields if mailing is NOT same as residence
+    # Mailing address fields (Part 4, Question 3)
     if data.get("mailing_same_as_residence") == "no":
+        mailing_unit = data.get("mailing_apt_type", "").lower()
+        if mailing_unit == "apt":
+            fields["form1[0].#subform[3].P5_Line1b_Unit[2]"] = "/APT"
+        elif mailing_unit == "ste":
+            fields["form1[0].#subform[3].P5_Line1b_Unit[1]"] = "/STE"
+        elif mailing_unit == "flr":
+            fields["form1[0].#subform[3].P5_Line1b_Unit[0]"] = "/FLR"
+        if data.get("mailing_apt_ste_flr"):
+            fields["form1[0].#subform[3].P5_Line1b_Number[0]"] = data["mailing_apt_ste_flr"]
         if data.get("mailing_in_care_of"):
-            fields["form1[0].#subform[2].P4_Line1_InCareOfName[0]"] = data["mailing_in_care_of"]
+            fields["form1[0].#subform[3].P5_Line1b_InCareOfName[0]"] = data["mailing_in_care_of"]
         if data.get("mailing_street_address"):
-            fields["form1[0].#subform[2].P4_Line3_PhysicalAddress1[0]"] = data["mailing_street_address"]
+            fields["form1[0].#subform[3].P5_Line1b_StreetName[0]"] = data["mailing_street_address"]
         if data.get("mailing_city"):
-            fields["form1[0].#subform[2].P4_Line3_CityTown1[0]"] = data["mailing_city"]
+            fields["form1[0].#subform[3].P5_Line1b_City[0]"] = data["mailing_city"]
         if data.get("mailing_state"):
-            fields["form1[0].#subform[2].P4_Line3_State1[0]"] = data["mailing_state"]
+            fields["form1[0].#subform[3].P5_Line1b_State[0]"] = data["mailing_state"]
         if data.get("mailing_zip_code"):
-            fields["form1[0].#subform[2].P4_Line3_ZipCode1[0]"] = data["mailing_zip_code"]
+            fields["form1[0].#subform[3].P5_Line1b_ZipCode[0]"] = data["mailing_zip_code"]
+        if data.get("mailing_province"):
+            fields["form1[0].#subform[3].P5_Line1b_Province[0]"] = data["mailing_province"]
+        if data.get("mailing_postal_code"):
+            fields["form1[0].#subform[3].P5_Line1b_PostalCode[0]"] = data["mailing_postal_code"]
+        if data.get("mailing_country"):
+            fields["form1[0].#subform[3].P5_Line1b_Country[0]"] = data["mailing_country"]
+
+    # Previous physical addresses (Part 4.1 table)
+    residence_addresses = data.get("residence_addresses", [])
+    for i, address in enumerate(residence_addresses[:3]):
+        idx = i + 1
+        if address.get("street_address"):
+            fields[f"form1[0].#subform[2].P4_Line3_PhysicalAddress{idx}[0]"] = address["street_address"]
+        if address.get("city"):
+            fields[f"form1[0].#subform[2].P4_Line3_CityTown{idx}[0]"] = address["city"]
+        state_val = address.get("state") or address.get("province")
+        if state_val:
+            fields[f"form1[0].#subform[2].P4_Line3_State{idx}[0]"] = state_val
+        zip_val = address.get("zip_code") or address.get("postal_code")
+        if zip_val:
+            fields[f"form1[0].#subform[2].P4_Line3_ZipCode{idx}[0]"] = zip_val
+        if address.get("country"):
+            fields[f"form1[0].#subform[2].P4_Line3_Country{idx}[0]"] = address["country"]
+
+        if address.get("dates_from"):
+            if idx == 1:
+                fields["form1[0].#subform[2].P4_Line3_From1[0]"] = format_date(address["dates_from"])
+            else:
+                fields[f"form1[0].#subform[2].P4_Line3_From{idx}[0]"] = format_date(address["dates_from"])
+        if address.get("dates_to"):
+            if idx == 1:
+                fields["form1[0].#subform[2].P4_Line3_From1[1]"] = format_date(address["dates_to"])
+            else:
+                fields[f"form1[0].#subform[2].P4_Line3_To{idx}[0]"] = format_date(address["dates_to"])
 
     # ═══════════════════════════════════════════════════════════════
     # PART 7: BIOGRAPHIC INFO (Page 3)
@@ -335,11 +382,13 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if data.get("spouse_date_of_marriage"):
             fields["form1[0].#subform[3].P10_Line4e_DateEnterMarriage[0]"] = format_date(data["spouse_date_of_marriage"])
 
-        # Spouse citizen
-        if data.get("spouse_is_us_citizen") == "yes":
+        # Spouse address same as applicant
+        if data.get("spouse_address_same_as_applicant") == "yes":
             fields["form1[0].#subform[3].P10_Line5_Citizen[1]"] = "/Y"
-        elif data.get("spouse_is_us_citizen") == "no":
+            fields["form1[0].#subform[10].P10_Line1_Citizen[1]"] = "/Y"
+        elif data.get("spouse_address_same_as_applicant") == "no":
             fields["form1[0].#subform[3].P10_Line5_Citizen[0]"] = "/N"
+            fields["form1[0].#subform[10].P10_Line1_Citizen[0]"] = "/N"
 
         # Spouse citizenship by birth
         if data.get("spouse_citizenship_by_birth") == "yes":
@@ -353,15 +402,50 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if data.get("spouse_a_number"):
             fields["form1[0].#subform[4].#area[5].P7_Line6_ANumber[0]"] = data["spouse_a_number"]
 
+        # Spouse times married (Page 5 - Q7)
+        if data.get("spouse_times_married"):
+            fields["form1[0].#subform[4].P10_Line4g_Employer[0]"] = str(data["spouse_times_married"])
+
         # Spouse employer (Page 5 - Q8)
         if data.get("spouse_current_employer"):
-            fields["form1[0].#subform[4].P10_Line4g_Employer[0]"] = data["spouse_current_employer"]
+            fields["form1[0].#subform[4].TextField1[0]"] = data["spouse_current_employer"]
 
     # ═══════════════════════════════════════════════════════════════
     # PART 6: CHILDREN (Page 5)
     # ═══════════════════════════════════════════════════════════════
     if data.get("total_children"):
         fields["form1[0].#subform[4].P11_Line1_TotalChildren[0]"] = str(data["total_children"])
+
+    children = data.get("children", [])
+    for i, child in enumerate(children[:3]):
+        idx = i + 1
+        if child.get("first_name") or child.get("last_name"):
+            name = f"{child.get('first_name', '')} {child.get('last_name', '')}".strip()
+            fields[f"form1[0].#subform[4].P7_EmployerName{idx}[0]"] = name
+        if child.get("date_of_birth"):
+            fields[f"form1[0].#subform[4].P7_From{idx}[0]"] = format_date(child["date_of_birth"])
+        if child.get("residence"):
+            fields[f"form1[0].#subform[4].P7_OccupationFieldStudy{idx}[0]"] = child["residence"]
+        if child.get("relationship"):
+            fields[f"form1[0].#subform[4].P7_OccupationFieldStudy{idx}[1]"] = child["relationship"]
+
+        support_val = child.get("support") or data.get("providing_support_for_children")
+        if support_val:
+            if idx == 1:
+                if support_val == "yes":
+                    fields["form1[0].#subform[4].P9_Line5a[0]"] = "/Y"
+                elif support_val == "no":
+                    fields["form1[0].#subform[4].P9_Line5a[1]"] = "/N"
+            elif idx == 2:
+                if support_val == "yes":
+                    fields["form1[0].#subform[4].P6_ChildTwo[1]"] = "/Y"
+                elif support_val == "no":
+                    fields["form1[0].#subform[4].P6_ChildTwo[0]"] = "/N"
+            elif idx == 3:
+                if support_val == "yes":
+                    fields["form1[0].#subform[4].P6_ChildThree[1]"] = "/Y"
+                elif support_val == "no":
+                    fields["form1[0].#subform[4].P6_ChildThree[0]"] = "/N"
 
     # ═══════════════════════════════════════════════════════════════
     # PART 3: EMPLOYMENT (Page 5)
@@ -376,7 +460,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         fields["form1[0].#subform[4].P5_EmployerName1[0]"] = employer1
     occupation1 = emp1.get("occupation_or_field") or data.get("current_occupation", "")
     if occupation1:
-        fields["form1[0].#subform[4].P7_OccupationFieldStudy1[0]"] = occupation1
+        fields["form1[0].#subform[4].P7_OccupationFieldStudy1[2]"] = occupation1
     city1 = emp1.get("city") or data.get("employer_city", "")
     if city1:
         fields["form1[0].#subform[4].P7_City1[0]"] = city1
@@ -389,9 +473,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         fields["form1[0].#subform[4].P7_Country1[0]"] = emp1["country"]
     from1 = emp1.get("dates_from") or data.get("employment_from", "")
     if from1:
-        fields["form1[0].#subform[4].P7_From1[0]"] = format_date(from1)
-    if emp1.get("dates_to"):
-        fields["form1[0].#subform[4].P7_From1[1]"] = format_date(emp1["dates_to"])
+        fields["form1[0].#subform[4].P7_From1[1]"] = format_date(from1)
 
     # Employment 2
     if len(employment_history) > 1:
@@ -399,7 +481,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if emp2.get("employer_or_school"):
             fields["form1[0].#subform[4].P5_EmployerName2[0]"] = emp2["employer_or_school"]
         if emp2.get("occupation_or_field"):
-            fields["form1[0].#subform[4].P7_OccupationFieldStudy2[0]"] = emp2["occupation_or_field"]
+            fields["form1[0].#subform[4].P7_OccupationFieldStudy2[2]"] = emp2["occupation_or_field"]
         if emp2.get("city"):
             fields["form1[0].#subform[4].P7_City2[0]"] = emp2["city"]
         if emp2.get("state"):
@@ -409,7 +491,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if emp2.get("country"):
             fields["form1[0].#subform[4].P7_Country2[0]"] = emp2["country"]
         if emp2.get("dates_from"):
-            fields["form1[0].#subform[4].P7_From2[0]"] = format_date(emp2["dates_from"])
+            fields["form1[0].#subform[4].P7_From2[1]"] = format_date(emp2["dates_from"])
         if emp2.get("dates_to"):
             fields["form1[0].#subform[4].P7_To2[0]"] = format_date(emp2["dates_to"])
 
@@ -419,7 +501,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if emp3.get("employer_or_school"):
             fields["form1[0].#subform[4].P5_EmployerName3[0]"] = emp3["employer_or_school"]
         if emp3.get("occupation_or_field"):
-            fields["form1[0].#subform[4].P7_OccupationFieldStudy3[0]"] = emp3["occupation_or_field"]
+            fields["form1[0].#subform[4].P7_OccupationFieldStudy3[2]"] = emp3["occupation_or_field"]
         if emp3.get("city"):
             fields["form1[0].#subform[4].P7_City3[0]"] = emp3["city"]
         if emp3.get("state"):
@@ -429,21 +511,13 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if emp3.get("country"):
             fields["form1[0].#subform[4].P7_Country3[0]"] = emp3["country"]
         if emp3.get("dates_from"):
-            fields["form1[0].#subform[4].P7_From3[0]"] = format_date(emp3["dates_from"])
+            fields["form1[0].#subform[4].P7_From3[1]"] = format_date(emp3["dates_from"])
         if emp3.get("dates_to"):
             fields["form1[0].#subform[4].P7_To3[0]"] = format_date(emp3["dates_to"])
 
     # ═══════════════════════════════════════════════════════════════
     # PART 4: TIME OUTSIDE US (Pages 5-6)
     # ═══════════════════════════════════════════════════════════════
-    if data.get("total_days_outside_us"):
-        fields["form1[0].#subform[5].P9_Line1_Countries1[0]"] = str(data["total_days_outside_us"])
-
-    if data.get("trips_over_6_months") == "yes":
-        fields["form1[0].#subform[4].P9_Line5a[0]"] = "/Y"
-    elif data.get("trips_over_6_months") == "no":
-        fields["form1[0].#subform[4].P9_Line5a[1]"] = "/N"
-
     # Trips (up to 6)
     trips = data.get("trips", [])
     for i, trip in enumerate(trips[:6]):
@@ -452,8 +526,11 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
             fields[f"form1[0].#subform[5].P8_Line1_DateLeft{idx}[0]"] = format_date(trip["date_left_us"])
         if trip.get("date_returned_us"):
             fields[f"form1[0].#subform[5].P8_Line1_DateReturn{idx}[0]"] = format_date(trip["date_returned_us"])
-        if trip.get("countries_traveled") and idx > 1:
-            fields[f"form1[0].#subform[5].P8_Line1_Countries{idx}[0]"] = trip["countries_traveled"]
+        if trip.get("countries_traveled"):
+            if idx == 1:
+                fields["form1[0].#subform[5].P9_Line1_Countries1[0]"] = trip["countries_traveled"]
+            else:
+                fields[f"form1[0].#subform[5].P8_Line1_Countries{idx}[0]"] = trip["countries_traveled"]
 
     # ═══════════════════════════════════════════════════════════════
     # PART 12: BACKGROUND QUESTIONS (Pages 6-10)
@@ -571,6 +648,8 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
 
     if data.get("signature_date"):
         fields["form1[0].#subform[10].P13_DateofSignature[0]"] = format_date(data["signature_date"])
+    if data.get("applicant_signature"):
+        fields["form1[0].#subform[10].P12_SignatureApplicant[0]"] = data["applicant_signature"]
 
     # Fee Reduction
     if data.get("fee_reduction_requested") == "yes":
@@ -628,6 +707,27 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
             fields["form1[0].#subform[11].P15_Line6_Email[0]"] = data["preparer_email"]
         if data.get("preparer_signature_date"):
             fields["form1[0].#subform[11].P15_DateofSignature[0]"] = format_date(data["preparer_signature_date"])
+
+    # ═══════════════════════════════════════════════════════════════
+    # PART 16: ADDITIONAL INFORMATION (Pages 13-14)
+    # ═══════════════════════════════════════════════════════════════
+    additional_entries = data.get("additional_information", [])
+    additional_field_sets = [
+        ("P11_Line3A", "P11_Line3B", "P11_Line3C", "P11_Line3D"),
+        ("P11_Line4A", "P11_Line4B", "P11_Line4C", "P11_Line4D"),
+        ("P11_Line5A", "P11_Line5B", "P11_Line5C", "P11_Line5D"),
+        ("P11_Line6A", "P11_Line6B", "P11_Line6C", "P11_Line6D"),
+    ]
+    for idx, entry in enumerate(additional_entries[:4]):
+        page_field, part_field, item_field, explanation_field = additional_field_sets[idx]
+        if entry.get("page_number"):
+            fields[f"form1[0].#subform[12].{page_field}[0]"] = entry["page_number"]
+        if entry.get("part_number"):
+            fields[f"form1[0].#subform[12].{part_field}[0]"] = entry["part_number"]
+        if entry.get("item_number"):
+            fields[f"form1[0].#subform[12].{item_field}[0]"] = entry["item_number"]
+        if entry.get("explanation"):
+            fields[f"form1[0].#subform[12].{explanation_field}[0]"] = entry["explanation"]
 
     return fields
 

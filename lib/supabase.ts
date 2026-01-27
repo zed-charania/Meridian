@@ -15,6 +15,7 @@ export const supabase = createClient(
 // Database types for N-400 form
 export interface N400FormData {
   id?: string;
+  user_id?: string;
 
   // ═══════════════════════════════════════════════════════════════
   // PART 1: ELIGIBILITY
@@ -245,6 +246,15 @@ export interface N400FormData {
   // ═══════════════════════════════════════════════════════════════
   // METADATA
   // ═══════════════════════════════════════════════════════════════
+  created_at?: string;
+  updated_at?: string;
+  status?: string;
+}
+
+export interface N400FormRecord {
+  id?: string;
+  user_id?: string;
+  payload: N400FormData;
   created_at?: string;
   updated_at?: string;
   status?: string;

@@ -6,6 +6,17 @@ const PDF_API_URL = process.env.PDF_API_URL || "http://localhost:5000";
 
 export async function POST(request: NextRequest) {
   try {
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader) {
+      return NextResponse.json({ error: "Missing authorization" }, { status: 401 });
+    }
+
+    const accessToken = authHeader.replace("Bearer ", "").trim();
+    const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
+    if (userError || !userData?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { formId, flatten = false } = body;
 
@@ -17,6 +28,7 @@ export async function POST(request: NextRequest) {
         .from("n400_forms")
         .select("*")
         .eq("id", formId)
+        .eq("user_id", userData.user.id)
         .single();
 
       if (error || !data) {
@@ -27,6 +39,7 @@ export async function POST(request: NextRequest) {
       const { data, error } = await supabaseAdmin
         .from("n400_forms")
         .select("*")
+        .eq("user_id", userData.user.id)
         .order("created_at", { ascending: false })
         .limit(1)
         .single();
@@ -37,13 +50,15 @@ export async function POST(request: NextRequest) {
       dbData = data;
     }
 
+    const payload = dbData?.payload ?? dbData;
+
     // Call Python PDF API
     const pdfResponse = await fetch(`${PDF_API_URL}/generate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(dbData),
+      body: JSON.stringify(payload),
     });
 
     if (!pdfResponse.ok) {
@@ -58,7 +73,7 @@ export async function POST(request: NextRequest) {
     const pdfBytes = await pdfResponse.arrayBuffer();
 
     // Generate filename
-    const filename = `N-400_${dbData.last_name || "Unknown"}_${dbData.first_name || "Applicant"}.pdf`.replace(/\s+/g, "_");
+    const filename = `N-400_${payload.last_name || "Unknown"}_${payload.first_name || "Applicant"}.pdf`.replace(/\s+/g, "_");
 
     return new NextResponse(pdfBytes, {
       headers: {

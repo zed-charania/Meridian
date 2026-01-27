@@ -1,6 +1,6 @@
 "use server";
 
-import { supabaseAdmin, N400FormData } from "@/lib/supabase";
+import { supabaseAdmin, N400FormData, N400FormRecord } from "@/lib/supabase";
 
 export interface FormSubmissionResult {
   success: boolean;
@@ -11,11 +11,24 @@ export interface FormSubmissionResult {
 /**
  * Submit N-400 form data to Supabase
  */
-export async function submitN400Form(formData: N400FormData): Promise<FormSubmissionResult> {
+export async function submitN400Form(
+  formData: N400FormData,
+  accessToken?: string
+): Promise<FormSubmissionResult> {
   try {
+    if (!accessToken) {
+      return { success: false, error: "Missing auth token" };
+    }
+
+    const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
+    if (userError || !userData?.user) {
+      return { success: false, error: "Unauthorized user" };
+    }
+
     // Add metadata
-    const dataWithMetadata = {
-      ...formData,
+    const dataWithMetadata: N400FormRecord = {
+      user_id: userData.user.id,
+      payload: formData,
       status: "submitted",
       updated_at: new Date().toISOString(),
     };
@@ -35,9 +48,14 @@ export async function submitN400Form(formData: N400FormData): Promise<FormSubmis
       };
     }
 
+    const payload = data?.payload ?? data;
     return {
       success: true,
-      data: data as N400FormData,
+      data: {
+        ...(payload as N400FormData),
+        id: data?.id,
+        user_id: data?.user_id,
+      },
     };
   } catch (err) {
     console.error("Form submission error:", err);
@@ -67,9 +85,14 @@ export async function getLatestN400Form(): Promise<FormSubmissionResult> {
       };
     }
 
+    const payload = data?.payload ?? data;
     return {
       success: true,
-      data: data as N400FormData,
+      data: {
+        ...(payload as N400FormData),
+        id: data?.id,
+        user_id: data?.user_id,
+      },
     };
   } catch (err) {
     return {
@@ -97,9 +120,14 @@ export async function getN400FormById(id: string): Promise<FormSubmissionResult>
       };
     }
 
+    const payload = data?.payload ?? data;
     return {
       success: true,
-      data: data as N400FormData,
+      data: {
+        ...(payload as N400FormData),
+        id: data?.id,
+        user_id: data?.user_id,
+      },
     };
   } catch (err) {
     return {
