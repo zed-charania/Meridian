@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Test output
+test-output/
+pdf-api/test-output/
+
+# Old PDF backup
+templates/n-400-old.pdf
+
+# Python cache
+__pycache__/
+*.pyc
