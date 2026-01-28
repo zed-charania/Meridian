@@ -11,6 +11,7 @@ Endpoints:
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from pypdf import PdfReader, PdfWriter
+from pypdf.generic import NameObject, BooleanObject
 import os
 import io
 
@@ -733,37 +734,61 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
 
 
 def fill_pdf(template_path: str, field_data: dict) -> bytes:
-    """Fill PDF with form data and return bytes."""
+    """
+    Fill PDF with form data and return bytes.
+
+    This mirrors the working logic from scripts/fill-pdf.py:
+    - Decrypts if needed
+    - Sets /NeedAppearances so viewers render updated fields
+    - Applies all fields across all pages via update_page_form_field_values
+    """
+    print(f"📄 Loading PDF from: {template_path}")
+
     reader = PdfReader(template_path)
 
+    # Decrypt if needed
     if reader.is_encrypted:
         reader.decrypt('')
+        print("✓ Decrypted PDF")
 
     writer = PdfWriter()
     writer.append(reader)
 
-    all_fields = reader.get_fields() or {}
+    # Hint to PDF viewers that they should regenerate appearances
+    try:
+        if "/AcroForm" in writer._root_object:
+            acro_form = writer._root_object["/AcroForm"]
+            acro_form.update(
+                {NameObject("/NeedAppearances"): BooleanObject(True)}
+            )
+    except Exception as e:
+        print(f"⚠️ Could not set NeedAppearances: {e}")
 
+    # Get all field names for reference
+    fields = reader.get_fields() or {}
+    print(f"✓ Found {len(fields)} fields in PDF\n")
+
+    print("Filling fields on all pages:")
     filled_count = 0
-    not_found = []
 
-    for field_name, value in field_data.items():
-        if field_name in all_fields:
-            try:
-                writer.update_page_form_field_values(
-                    None,
-                    {field_name: value},
-                    auto_regenerate=False
-                )
-                filled_count += 1
-            except Exception as e:
-                print(f"Warning: Could not fill {field_name}: {e}")
-        else:
-            not_found.append(field_name)
+    # Apply mapping on every page
+    for page_index, page in enumerate(writer.pages):
+        try:
+            writer.update_page_form_field_values(
+                page,
+                field_data,
+                auto_regenerate=True,
+            )
+            print(f"  ✓ Applied mapping on page {page_index + 1}")
+        except Exception as e:
+            print(f"  ✗ Error applying fields on page {page_index + 1}: {e}")
 
-    print(f"Filled {filled_count} of {len(field_data)} fields")
-    if not_found:
-        print(f"Fields not found: {not_found[:10]}...")
+    # Count how many of our target fields exist in the PDF
+    for field_name in field_data.keys():
+        if field_name in fields:
+            filled_count += 1
+
+    print(f"Filled up to {filled_count} of {len(field_data)} mapped fields")
 
     output = io.BytesIO()
     writer.write(output)

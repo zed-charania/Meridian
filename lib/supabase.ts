@@ -113,7 +113,9 @@ export interface N400FormData {
   current_occupation?: string;
   employer_city?: string;
   employer_state?: string;
+  employer_zip_code?: string;
   employment_from?: string;
+  employment_to?: string;
   employment_history?: string; // JSON stringified array
 
   // ═══════════════════════════════════════════════════════════════
@@ -243,12 +245,16 @@ export interface N400FormData {
   q_willing_noncombatant?: string;
   q_willing_work_national_importance?: string;
 
+  // Additional Information
+  additional_information?: string; // JSON stringified array
+
   // ═══════════════════════════════════════════════════════════════
   // METADATA
   // ═══════════════════════════════════════════════════════════════
   created_at?: string;
   updated_at?: string;
   status?: string;
+  current_step?: number;
 }
 
 export interface N400FormRecord {

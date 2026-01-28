@@ -890,7 +890,7 @@ export default function LandingPage() {
           <a href="#faq" className="lp-nav-link">FAQ</a>
         </nav>
         <Link href="/form" className="lp-header-cta">
-          Get Started
+          Return to my application
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 12h14M12 5l7 7-7 7"/>
           </svg>
@@ -908,7 +908,7 @@ export default function LandingPage() {
           </p>
           <div className="lp-cta-group reveal reveal-delay-3">
             <Link href="/form" className="lp-cta-primary">
-              Start Your Application — $249
+              Return to my application
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M5 12h14M12 5l7 7-7 7"/>
               </svg>
@@ -1138,7 +1138,7 @@ export default function LandingPage() {
           <p className="reveal reveal-delay-1">Join hundreds of applicants who&apos;ve successfully obtained citizenship using Meridian.</p>
           <div className="lp-cta-group reveal reveal-delay-2">
             <Link href="/form" className="lp-cta-primary">
-              Complete Your N-400 — $249
+              Return to my application
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M5 12h14M12 5l7 7-7 7"/>
               </svg>

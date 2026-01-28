@@ -52,8 +52,21 @@ export function AuthGate({ children }: AuthGateProps) {
 
   async function handleSignOut() {
     setAuthError(null);
-    const { error } = await supabase.auth.signOut();
-    if (error) setAuthError(error.message);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error("Supabase sign out error:", error);
+        setAuthError(error.message);
+        return;
+      }
+      // Ensure local UI reflects signed-out state even if the auth listener is delayed
+      setSession(null);
+      // Hard refresh to clear any in-memory state that might still hold an old access token
+      if (typeof window !== "undefined") window.location.href = "/";
+    } catch (err) {
+      console.error("Unexpected sign out error:", err);
+      setAuthError(err instanceof Error ? err.message : "Unable to sign out. Please try again.");
+    }
   }
 
   if (isLoading) {

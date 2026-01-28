@@ -7,8 +7,10 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { HelpCircle, Plus, Trash2 } from "lucide-react";
-import { submitN400Form } from "@/app/actions/n400-form";
+import { submitN400Form, saveN400Draft, getLatestN400Draft } from "@/app/actions/n400-form";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+import type { N400FormData } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 
 // Meridian Guidance Pattern Components & Metadata
 import { GuidanceHeader } from "@/components/ui/guidance-header";
@@ -88,7 +90,13 @@ const n400Schema = z.object({
   // ═══════════════════════════════════════════════════════════════
   daytime_phone: z.string().min(1, "Phone number is required"),
   mobile_phone: z.string().optional(),
-  email: z.string().email("Please enter a valid email"),
+  // Email is optional in the UI ("if any"), so allow empty/undefined but
+  // still validate format when a value is provided.
+  email: z
+    .string()
+    .email("Please enter a valid email")
+    .optional()
+    .or(z.literal("")),
 
   // ═══════════════════════════════════════════════════════════════
   // PART 5: RESIDENCE INFORMATION
@@ -129,7 +137,10 @@ const n400Schema = z.object({
   // PART 7: BIOGRAPHIC INFORMATION
   // ═══════════════════════════════════════════════════════════════
   ethnicity: z.string().min(1, "Ethnicity is required"),
-  race: z.string().min(1, "Race is required"), // Form allows multiple but we'll handle as string for now
+  race: z
+    .string()
+    .min(1, "Race is required")
+    .or(z.array(z.string()).min(1, "Race is required")),
   height_feet: z.string().min(1, "Height is required"),
   height_inches: z.string().optional(),
   weight: z.string().min(1, "Weight is required"),
@@ -173,7 +184,8 @@ const n400Schema = z.object({
   })).optional(),
   
   total_days_outside_us: z.string().optional(),
-  trips_over_6_months: z.string().optional(),
+  // Allow null or empty value if the user has not taken any long trips
+  trips_over_6_months: z.string().nullable().optional(),
 
   // ═══════════════════════════════════════════════════════════════
   // PART 10: MARITAL HISTORY
@@ -412,6 +424,68 @@ const n400Schema = z.object({
 
 type FormData = z.infer<typeof n400Schema>;
 
+interface OtherName {
+  family_name: string
+  given_name: string
+  middle_name?: string
+}
+
+interface ResidenceAddress {
+  street_address: string
+  apt_ste_flr?: string
+  city: string
+  state?: string
+  zip_code?: string
+  country?: string
+  province?: string
+  postal_code?: string
+  dates_from: string
+  dates_to?: string
+}
+
+interface EmploymentHistoryEntry {
+  employer_or_school: string
+  occupation_or_field?: string
+  city?: string
+  state?: string
+  zip_code?: string
+  country?: string
+  province?: string
+  postal_code?: string
+  dates_from: string
+  dates_to?: string
+}
+
+interface TripEntry {
+  date_left_us: string
+  date_returned_us: string
+  countries_traveled: string
+}
+
+interface ChildEntry {
+  first_name: string
+  last_name: string
+  date_of_birth: string
+  residence: string
+  relationship: string
+}
+
+interface CrimeEntry {
+  date_of_crime?: string
+  date_of_conviction?: string
+  crime_description?: string
+  place_of_crime?: string
+  result_disposition?: string
+  sentence?: string
+}
+
+interface AdditionalInformationEntry {
+  page_number?: string
+  part_number?: string
+  item_number?: string
+  explanation: string
+}
+
 // ═══════════════════════════════════════════════════════════════
 // STEP DEFINITIONS
 // ═══════════════════════════════════════════════════════════════
@@ -642,311 +716,34 @@ const EYE_COLORS = ["Black", "Blue", "Brown", "Gray", "Green", "Hazel", "Maroon"
 const HAIR_COLORS = ["Bald", "Black", "Blond", "Brown", "Gray", "Red", "Sandy", "White", "Unknown"];
 
 const DEFAULT_FORM_VALUES: FormData = {
-  // Part 1 - Eligibility
-  eligibility_basis: "5year",
-  other_basis_reason: "N/A",
-  uscis_field_office: "San Francisco Field Office",
-
-  // Part 2 - Identity
-  first_name: "Maria",
-  middle_name: "Elena",
-  last_name: "Rodriguez",
-  wants_name_change: "yes",
-  new_name_first: "Maria",
-  new_name_middle: "Elena",
-  new_name_last: "Santos",
-  has_used_other_names: "yes",
-  other_names: [
-    {
-      family_name: "Hernandez",
-      given_name: "Maria",
-      middle_name: "Elena",
-    },
-  ],
-  date_of_birth: "03/15/1985",
-  country_of_birth: "Mexico",
-  country_of_citizenship: "Mexico",
-  gender: "female",
-  parent_us_citizen_before_18: "no",
-
-  // Identification Numbers
-  a_number: "A123456789",
-  uscis_account_number: "1234-5678-9012",
-  ssn: "123-45-6789",
-  ssa_wants_card: "yes",
-  ssa_consent_disclosure: "yes",
-
-  // Green Card Information
-  date_became_permanent_resident: "06/20/2019",
-
-  // Disability Accommodations
-  request_disability_accommodations: "no",
-
-  // Part 4 - Contact
-  daytime_phone: "555-123-4567",
-  mobile_phone: "555-987-6543",
-  email: "maria.rodriguez@email.com",
-
-  // Part 5 - Residence
-  residence_addresses: [
-    {
-      street_address: "1234 Oak Street",
-      apt_ste_flr: "Apt 4B",
-      city: "San Francisco",
-      state: "CA",
-      zip_code: "94102",
-      country: "United States",
-      province: "",
-      postal_code: "",
-      dates_from: "01/2021",
-      dates_to: "Present",
-    },
-    {
-      street_address: "88 Mission St",
-      apt_ste_flr: "Unit 12",
-      city: "San Jose",
-      state: "CA",
-      zip_code: "95112",
-      country: "United States",
-      province: "",
-      postal_code: "",
-      dates_from: "02/2018",
-      dates_to: "12/2020",
-    },
-  ],
-  street_address: "1234 Oak Street",
-  apt_ste_flr: "Apt 4B",
-  city: "San Francisco",
-  state: "CA",
-  zip_code: "94102",
-  residence_from: "01/2021",
-  residence_to: "Present",
-  mailing_same_as_residence: "yes",
-  mailing_street_address: "1234 Oak Street",
-  mailing_apt_ste_flr: "Apt 4B",
-  mailing_in_care_of: "",
-  mailing_city: "San Francisco",
-  mailing_state: "CA",
-  mailing_zip_code: "94102",
-
-  // Part 7 - Biographic
-  ethnicity: "hispanic",
-  race: "white",
-  height_feet: "5",
-  height_inches: "6",
-  weight: "135",
-  eye_color: "Brown",
-  hair_color: "Black",
-
-  // Part 8 - Employment
-  employment_history: [
-    {
-      employer_or_school: "Tech Solutions Inc.",
-      occupation_or_field: "Software Engineer",
-      city: "San Francisco",
-      state: "CA",
-      zip_code: "94102",
-      country: "United States",
-      province: "",
-      postal_code: "",
-      dates_from: "03/2020",
-      dates_to: "Present",
-    },
-    {
-      employer_or_school: "Bay Area College",
-      occupation_or_field: "Student",
-      city: "San Jose",
-      state: "CA",
-      zip_code: "95112",
-      country: "United States",
-      province: "",
-      postal_code: "",
-      dates_from: "08/2016",
-      dates_to: "02/2020",
-    },
-  ],
-  current_employer: "Tech Solutions Inc.",
-  current_occupation: "Software Engineer",
-  employer_city: "San Francisco",
-  employer_state: "CA",
-  employer_zip_code: "94102",
-  employment_from: "03/2020",
-  employment_to: "Present",
-
-  // Part 9 - Travel
-  trips: [
-    { date_left_us: "06/10/2022", date_returned_us: "06/20/2022", countries_traveled: "Mexico" },
-    { date_left_us: "12/05/2021", date_returned_us: "12/15/2021", countries_traveled: "Canada" },
-    { date_left_us: "08/01/2020", date_returned_us: "08/20/2020", countries_traveled: "Spain" },
-  ],
-  total_days_outside_us: "45",
-  trips_over_6_months: "no",
-
-  // Part 10 - Marital
-  marital_status: "married",
-  times_married: "1",
-  spouse_is_military_member: "no",
-  spouse_first_name: "Carlos",
-  spouse_middle_name: "Antonio",
-  spouse_last_name: "Rodriguez",
-  spouse_date_of_birth: "07/22/1983",
-  spouse_date_of_marriage: "09/15/2010",
-  spouse_is_us_citizen: "yes",
-  spouse_citizenship_by_birth: "no",
-  spouse_date_became_citizen: "03/12/2015",
-  spouse_address_same_as_applicant: "yes",
-  spouse_a_number: "A987654321",
-  spouse_times_married: "1",
-  spouse_country_of_birth: "Mexico",
-  spouse_current_employer: "City Hospital",
-
-  // Part 11 - Children
-  total_children: "2",
-  children: [
-    {
-      first_name: "Sofia",
-      last_name: "Rodriguez",
-      date_of_birth: "05/10/2012",
-      residence: "resides with me",
-      relationship: "biological son or daughter",
-    },
-    {
-      first_name: "Diego",
-      last_name: "Rodriguez",
-      date_of_birth: "11/03/2015",
-      residence: "resides with me",
-      relationship: "biological son or daughter",
-    },
-  ],
-  providing_support_for_children: "yes",
-
-  // Part 12 - Background (defaults to "no")
-  q_claimed_us_citizen: "no",
-  q_voted_in_us: "no",
-  q_failed_to_file_taxes: "no",
-  q_nonresident_alien_tax: "no",
-  q_owe_taxes: "no",
-  q_title_of_nobility: "no",
-  q_willing_to_give_up_titles: "no",
-  q_communist_party: "no",
-  q_advocated_overthrow: "no",
-  q_terrorist_org: "no",
-  q_genocide: "no",
-  q_torture: "no",
-  q_killing_person: "no",
-  q_sexual_contact_nonconsent: "no",
-  q_severely_injuring: "no",
-  q_religious_persecution: "no",
-  q_harm_race_religion: "no",
-  q_used_weapon_explosive: "no",
-  q_kidnapping_assassination_hijacking: "no",
-  q_threatened_weapon_violence: "no",
-  q_military_police_service: "no",
-  q_armed_group: "no",
-  q_detention_facility: "no",
-  q_group_used_weapons: "no",
-  q_used_weapon_against_person: "no",
-  q_threatened_weapon_use: "no",
-  q_weapons_training: "no",
-  q_sold_provided_weapons: "no",
-  q_recruited_under_15: "no",
-  q_used_under_15_hostilities: "no",
-  q_arrested: "yes",
-  q_committed_crime_not_arrested: "no",
-  crimes: [
-    {
-      date_of_crime: "02/14/2011",
-      date_of_conviction: "06/18/2011",
-      crime_description: "Minor traffic violation",
-      place_of_crime: "San Francisco, CA, USA",
-      result_disposition: "Fine paid",
-      sentence: "No jail time",
-    },
-  ],
-  q_completed_probation: "yes",
-  q_habitual_drunkard: "no",
-  q_prostitution: "no",
-  q_controlled_substances: "no",
-  q_marriage_fraud: "no",
-  q_polygamy: "no",
-  q_helped_illegal_entry: "no",
-  q_illegal_gambling: "no",
-  q_failed_child_support: "no",
-  q_misrepresentation_public_benefits: "no",
-  q_false_info_us_government: "no",
-  q_lied_us_government: "no",
-  q_removed_deported: "no",
-  q_removal_proceedings: "no",
-  q_male_18_26_lived_us: "yes",
-  q_registered_selective_service: "yes",
-  selective_service_number: "1234567890",
-  selective_service_date: "08/15/2003",
-  q_left_us_avoid_draft: "no",
-  q_applied_military_exemption: "no",
-  q_served_us_military: "no",
-  q_current_military_member: "no",
-  q_scheduled_deploy: "no",
-  q_stationed_outside_us: "no",
-  q_former_military_outside_us: "no",
-  q_discharged_because_alien: "no",
-  q_court_martialed: "no",
-  q_deserted_military: "no",
-  q_support_constitution: "yes",
-  q_understand_oath: "yes",
-  q_unable_oath_disability: "no",
-  q_willing_take_oath: "yes",
-  q_willing_bear_arms: "yes",
-  q_willing_noncombatant: "yes",
-  q_willing_work_national_importance: "yes",
-
-  // Part 10 - Fee Reduction
-  fee_reduction_requested: "yes",
-  household_income: "52000",
-  household_size: "4",
-  household_income_earners: "2",
-  is_head_of_household: "no",
-  head_of_household_name: "Carlos Rodriguez",
-
-  // Part 11 - Applicant Signature
-  applicant_signature: "Maria Rodriguez",
-  signature_date: "01/27/2026",
-
-  // Part 12 - Interpreter
-  used_interpreter: "yes",
-  interpreter_first_name: "Ana",
-  interpreter_last_name: "Lopez",
-  interpreter_business_name: "Lopez Language Services",
-  interpreter_phone: "555-222-3344",
-  interpreter_mobile: "555-222-5566",
-  interpreter_email: "ana.lopez@languageco.com",
-  interpreter_language: "Spanish",
-  interpreter_signature: "Ana Lopez",
-  interpreter_signature_date: "01/27/2026",
-
-  // Part 13 - Preparer
-  used_preparer: "yes",
-  preparer_first_name: "David",
-  preparer_last_name: "Nguyen",
-  preparer_business_name: "Immigration Prep Co.",
-  preparer_phone: "555-333-7788",
-  preparer_mobile: "555-333-9900",
-  preparer_email: "david.nguyen@immprep.com",
-  preparer_signature: "David Nguyen",
-  preparer_signature_date: "01/27/2026",
-
-  // Part 14 - Additional Information
-  additional_information: [
-    {
-      page_number: "1",
-      part_number: "14",
-      item_number: "1",
-      explanation: "Additional details provided for reference only.",
-    },
-  ],
-
-  // Missing fields
-  q_served_military_police_unit: "no",
-  q_titles_list: "N/A",
+  eligibility_basis: "",
+  last_name: "",
+  first_name: "",
+  date_of_birth: "",
+  country_of_birth: "",
+  country_of_citizenship: "",
+  gender: "",
+  date_became_permanent_resident: "",
+  daytime_phone: "",
+  email: "",
+  street_address: "",
+  city: "",
+  state: "",
+  zip_code: "",
+  ethnicity: "",
+  race: "",
+  height_feet: "",
+  weight: "",
+  eye_color: "",
+  hair_color: "",
+  marital_status: "",
+  other_names: [],
+  residence_addresses: [],
+  employment_history: [],
+  trips: [],
+  children: [],
+  crimes: [],
+  additional_information: [],
 }
 
 export default function N400Form() {
@@ -959,6 +756,13 @@ export default function N400Form() {
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(false);
+  const [savedDraftStep, setSavedDraftStep] = useState<number | null>(null);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [validationMessages, setValidationMessages] = useState<string[]>([]);
+  const router = useRouter();
   const supabase = getSupabaseBrowserClient();
 
   const {
@@ -969,6 +773,8 @@ export default function N400Form() {
     watch,
     control,
     setValue,
+    reset,
+    getValues,
   } = useForm<FormData>({
     resolver: zodResolver(n400Schema),
     mode: "onBlur",
@@ -1008,6 +814,49 @@ export default function N400Form() {
       subscription.subscription.unsubscribe();
     };
   }, [supabase]);
+
+  useEffect(() => {
+    let isActive = true
+
+    async function loadLatestDraft() {
+      if (!session?.access_token) return
+      setIsLoadingDraft(true)
+      setAuthError(null)
+      try {
+        const result = await getLatestN400Draft(session.access_token)
+        if (!isActive) return
+        if (result.success && result.data) {
+          reset(buildFormValues({ payload: result.data }))
+          const nextStep = Number.isFinite(result.data.current_step)
+            ? Math.min(Math.max(Number(result.data.current_step), 1), STEPS.length)
+            : 1
+          setSavedDraftStep(nextStep)
+          setCurrentStep(nextStep)
+          setSaveNotice("Saved draft loaded.")
+          return
+        }
+        if (result.error && result.error !== "No draft found") {
+          setAuthError(result.error)
+        }
+      } finally {
+        if (isActive) setIsLoadingDraft(false)
+      }
+    }
+
+    loadLatestDraft()
+
+    return () => {
+      isActive = false
+    }
+  }, [session?.access_token, reset])
+
+  // Clear "progress saved" notice on next edit
+  useEffect(() => {
+    if (!saveNotice) return
+    // Any change to watched data after a save clears the notice
+    setSaveNotice(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(watchedData)])
 
   // Handle return from payment success - check URL params
   useEffect(() => {
@@ -1172,8 +1021,11 @@ export default function N400Form() {
       }
       case 2: return ["first_name", "last_name", "date_of_birth", "country_of_birth", "country_of_citizenship", "gender"];
       case 3: return ["date_became_permanent_resident"];
-      case 4: return ["daytime_phone", "email"];
-      case 5: return ["street_address", "city", "state", "zip_code"];
+      // Only make phone required for this step. Email is marked "if any" in the UI.
+      case 4: return ["daytime_phone"];
+      // Allow users to progress as long as they provide a basic address;
+      // state/ZIP will be enforced on full submit instead of blocking this step.
+      case 5: return ["street_address", "city"];
       case 6: return ["ethnicity", "race", "height_feet", "weight", "eye_color", "hair_color"];
       case 7: return [];
       case 8: return [];
@@ -1200,22 +1052,26 @@ export default function N400Form() {
     setCurrentStep(step);
   };
 
-  const onSubmit = async (data: FormData) => {
-    setAuthError(null);
-    if (!session?.access_token) {
-      setAuthError("Please sign in again to submit your form.");
-      return;
-    }
-
-    setIsSubmitting(true);
+  function parseJsonArray<T>(value: unknown): T[] | undefined {
+    if (!value) return undefined
+    if (Array.isArray(value)) return value as T[]
+    if (typeof value !== "string") return undefined
     try {
-      const result = await submitN400Form({
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? (parsed as T[]) : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  function buildFormPayload({ data }: { data: FormData }): N400FormData {
+    return {
         // ═══════════════════════════════════════════════════════════════
         // PART 1: ELIGIBILITY
         // ═══════════════════════════════════════════════════════════════
         eligibility_basis: data.eligibility_basis,
-        other_basis_reason: data.other_basis_reason,
-        uscis_field_office: data.uscis_field_office,
+      other_basis_reason: data.other_basis_reason,
+      uscis_field_office: data.uscis_field_office,
 
         // ═══════════════════════════════════════════════════════════════
         // PART 2: INFORMATION ABOUT YOU
@@ -1223,24 +1079,24 @@ export default function N400Form() {
         first_name: data.first_name,
         middle_name: data.middle_name,
         last_name: data.last_name,
-        wants_name_change: data.wants_name_change,
-        new_name_first: data.new_name_first,
-        new_name_middle: data.new_name_middle,
-        new_name_last: data.new_name_last,
+      wants_name_change: data.wants_name_change,
+      new_name_first: data.new_name_first,
+      new_name_middle: data.new_name_middle,
+      new_name_last: data.new_name_last,
         has_used_other_names: data.has_used_other_names,
         other_names: data.other_names ? JSON.stringify(data.other_names) : undefined,
         date_of_birth: data.date_of_birth,
         country_of_birth: data.country_of_birth,
         country_of_citizenship: data.country_of_citizenship,
         gender: data.gender,
-        parent_us_citizen_before_18: data.parent_us_citizen_before_18,
+      parent_us_citizen_before_18: data.parent_us_citizen_before_18,
 
         // Identification Numbers
         a_number: data.a_number,
         uscis_account_number: data.uscis_account_number,
         ssn: data.ssn,
-        ssa_wants_card: data.ssa_wants_card,
-        ssa_consent_disclosure: data.ssa_consent_disclosure,
+      ssa_wants_card: data.ssa_wants_card,
+      ssa_consent_disclosure: data.ssa_consent_disclosure,
 
         // Green Card Information
         date_became_permanent_resident: data.date_became_permanent_resident,
@@ -1264,15 +1120,15 @@ export default function N400Form() {
         state: data.state,
         zip_code: data.zip_code,
         residence_from: data.residence_from,
-        residence_to: data.residence_to,
-        residence_addresses: data.residence_addresses ? JSON.stringify(data.residence_addresses) : undefined,
+      residence_to: data.residence_to,
+      residence_addresses: data.residence_addresses ? JSON.stringify(data.residence_addresses) : undefined,
 
         // Mailing Address (conditional - only if different from residence)
         mailing_same_as_residence: data.mailing_same_as_residence,
         ...(data.mailing_same_as_residence === "no" && {
           mailing_street_address: data.mailing_street_address,
-          mailing_apt_ste_flr: data.mailing_apt_ste_flr,
-          mailing_in_care_of: data.mailing_in_care_of,
+        mailing_apt_ste_flr: data.mailing_apt_ste_flr,
+        mailing_in_care_of: data.mailing_in_care_of,
           mailing_city: data.mailing_city,
           mailing_state: data.mailing_state,
           mailing_zip_code: data.mailing_zip_code,
@@ -1282,7 +1138,7 @@ export default function N400Form() {
         // PART 7: BIOGRAPHIC INFORMATION
         // ═══════════════════════════════════════════════════════════════
         ethnicity: data.ethnicity,
-        race: data.race,
+        race: Array.isArray(data.race) ? data.race.join(", ") : data.race,
         height_feet: data.height_feet,
         height_inches: data.height_inches,
         weight: data.weight,
@@ -1296,15 +1152,17 @@ export default function N400Form() {
         current_occupation: data.current_occupation,
         employer_city: data.employer_city,
         employer_state: data.employer_state,
+      employer_zip_code: data.employer_zip_code,
         employment_from: data.employment_from,
-        employment_history: data.employment_history ? JSON.stringify(data.employment_history) : undefined,
+      employment_to: data.employment_to,
+      employment_history: data.employment_history ? JSON.stringify(data.employment_history) : undefined,
 
         // ═══════════════════════════════════════════════════════════════
         // PART 9: TIME OUTSIDE THE US
         // ═══════════════════════════════════════════════════════════════
         total_days_outside_us: data.total_days_outside_us,
         trips_over_6_months: data.trips_over_6_months,
-        trips: data.trips ? JSON.stringify(data.trips) : undefined,
+      trips: data.trips ? JSON.stringify(data.trips) : undefined,
 
         // ═══════════════════════════════════════════════════════════════
         // PART 10: MARITAL HISTORY
@@ -1314,18 +1172,18 @@ export default function N400Form() {
 
         // Spouse Information (conditional - only if married)
         ...(data.marital_status === "married" && {
-          spouse_is_military_member: data.spouse_is_military_member,
+        spouse_is_military_member: data.spouse_is_military_member,
           spouse_first_name: data.spouse_first_name,
           spouse_middle_name: data.spouse_middle_name,
           spouse_last_name: data.spouse_last_name,
           spouse_date_of_birth: data.spouse_date_of_birth,
           spouse_date_of_marriage: data.spouse_date_of_marriage,
           spouse_is_us_citizen: data.spouse_is_us_citizen,
-          spouse_citizenship_by_birth: data.spouse_citizenship_by_birth,
-          spouse_date_became_citizen: data.spouse_date_became_citizen,
-          spouse_address_same_as_applicant: data.spouse_address_same_as_applicant,
+        spouse_citizenship_by_birth: data.spouse_citizenship_by_birth,
+        spouse_date_became_citizen: data.spouse_date_became_citizen,
+        spouse_address_same_as_applicant: data.spouse_address_same_as_applicant,
           spouse_a_number: data.spouse_a_number,
-          spouse_times_married: data.spouse_times_married,
+        spouse_times_married: data.spouse_times_married,
           spouse_country_of_birth: data.spouse_country_of_birth,
           spouse_current_employer: data.spouse_current_employer,
         }),
@@ -1334,8 +1192,8 @@ export default function N400Form() {
         // PART 11: CHILDREN
         // ═══════════════════════════════════════════════════════════════
         total_children: data.total_children,
-        children: data.children ? JSON.stringify(data.children) : undefined,
-        providing_support_for_children: data.providing_support_for_children,
+      children: data.children ? JSON.stringify(data.children) : undefined,
+      providing_support_for_children: data.providing_support_for_children,
 
         // ═══════════════════════════════════════════════════════════════
         // PART 12: BACKGROUND QUESTIONS
@@ -1344,81 +1202,181 @@ export default function N400Form() {
         q_claimed_us_citizen: data.q_claimed_us_citizen,
         q_voted_in_us: data.q_voted_in_us,
         q_failed_to_file_taxes: data.q_failed_to_file_taxes,
-        q_nonresident_alien_tax: data.q_nonresident_alien_tax,
+      q_nonresident_alien_tax: data.q_nonresident_alien_tax,
         q_owe_taxes: data.q_owe_taxes,
         q_title_of_nobility: data.q_title_of_nobility,
-        q_willing_to_give_up_titles: data.q_willing_to_give_up_titles,
+      q_willing_to_give_up_titles: data.q_willing_to_give_up_titles,
 
         // Affiliations
         q_communist_party: data.q_communist_party,
-        q_advocated_overthrow: data.q_advocated_overthrow,
+      q_advocated_overthrow: data.q_advocated_overthrow,
         q_terrorist_org: data.q_terrorist_org,
         q_genocide: data.q_genocide,
         q_torture: data.q_torture,
-        q_killing_person: data.q_killing_person,
-        q_sexual_contact_nonconsent: data.q_sexual_contact_nonconsent,
-        q_severely_injuring: data.q_severely_injuring,
-        q_religious_persecution: data.q_religious_persecution,
-        q_harm_race_religion: data.q_harm_race_religion,
+      q_killing_person: data.q_killing_person,
+      q_sexual_contact_nonconsent: data.q_sexual_contact_nonconsent,
+      q_severely_injuring: data.q_severely_injuring,
+      q_religious_persecution: data.q_religious_persecution,
+      q_harm_race_religion: data.q_harm_race_religion,
 
-        // Weapons and Violence
-        q_used_weapon_explosive: data.q_used_weapon_explosive,
-        q_kidnapping_assassination_hijacking: data.q_kidnapping_assassination_hijacking,
-        q_threatened_weapon_violence: data.q_threatened_weapon_violence,
+      // Weapons and Violence
+      q_used_weapon_explosive: data.q_used_weapon_explosive,
+      q_kidnapping_assassination_hijacking: data.q_kidnapping_assassination_hijacking,
+      q_threatened_weapon_violence: data.q_threatened_weapon_violence,
 
-        // Military/Police Service
-        q_military_police_service: data.q_military_police_service,
-        q_armed_group: data.q_armed_group,
-        q_detention_facility: data.q_detention_facility,
-        q_group_used_weapons: data.q_group_used_weapons,
-        q_used_weapon_against_person: data.q_used_weapon_against_person,
-        q_threatened_weapon_use: data.q_threatened_weapon_use,
-        q_weapons_training: data.q_weapons_training,
-        q_sold_provided_weapons: data.q_sold_provided_weapons,
-        q_recruited_under_15: data.q_recruited_under_15,
-        q_used_under_15_hostilities: data.q_used_under_15_hostilities,
+      // Military/Police Service
+      q_military_police_service: data.q_military_police_service,
+      q_armed_group: data.q_armed_group,
+      q_detention_facility: data.q_detention_facility,
+      q_group_used_weapons: data.q_group_used_weapons,
+      q_used_weapon_against_person: data.q_used_weapon_against_person,
+      q_threatened_weapon_use: data.q_threatened_weapon_use,
+      q_weapons_training: data.q_weapons_training,
+      q_sold_provided_weapons: data.q_sold_provided_weapons,
+      q_recruited_under_15: data.q_recruited_under_15,
+      q_used_under_15_hostilities: data.q_used_under_15_hostilities,
 
-        // Crimes and Offenses
+      // Crimes and Offenses
         q_arrested: data.q_arrested,
-        q_committed_crime_not_arrested: data.q_committed_crime_not_arrested,
-        crimes: data.crimes ? JSON.stringify(data.crimes) : undefined,
-        q_completed_probation: data.q_completed_probation,
+      q_committed_crime_not_arrested: data.q_committed_crime_not_arrested,
+      crimes: data.crimes ? JSON.stringify(data.crimes) : undefined,
+      q_completed_probation: data.q_completed_probation,
 
-        // Moral Character
+      // Moral Character
         q_habitual_drunkard: data.q_habitual_drunkard,
         q_prostitution: data.q_prostitution,
-        q_controlled_substances: data.q_controlled_substances,
-        q_marriage_fraud: data.q_marriage_fraud,
-        q_polygamy: data.q_polygamy,
-        q_helped_illegal_entry: data.q_helped_illegal_entry,
+      q_controlled_substances: data.q_controlled_substances,
+      q_marriage_fraud: data.q_marriage_fraud,
+      q_polygamy: data.q_polygamy,
+      q_helped_illegal_entry: data.q_helped_illegal_entry,
         q_illegal_gambling: data.q_illegal_gambling,
         q_failed_child_support: data.q_failed_child_support,
-        q_misrepresentation_public_benefits: data.q_misrepresentation_public_benefits,
+      q_misrepresentation_public_benefits: data.q_misrepresentation_public_benefits,
 
-        // Immigration Violations
-        q_false_info_us_government: data.q_false_info_us_government,
-        q_lied_us_government: data.q_lied_us_government,
-        q_removed_deported: data.q_removed_deported,
-        q_removal_proceedings: data.q_removal_proceedings,
+      // Immigration Violations
+      q_false_info_us_government: data.q_false_info_us_government,
+      q_lied_us_government: data.q_lied_us_government,
+      q_removed_deported: data.q_removed_deported,
+      q_removal_proceedings: data.q_removal_proceedings,
 
-        // Selective Service
-        q_male_18_26_lived_us: data.q_male_18_26_lived_us,
-        q_registered_selective_service: data.q_registered_selective_service,
-        selective_service_number: data.selective_service_number,
-        selective_service_date: data.selective_service_date,
+      // Selective Service
+      q_male_18_26_lived_us: data.q_male_18_26_lived_us,
+      q_registered_selective_service: data.q_registered_selective_service,
+      selective_service_number: data.selective_service_number,
+      selective_service_date: data.selective_service_date,
 
-        // Military Service
-        q_left_us_avoid_draft: data.q_left_us_avoid_draft,
-        q_applied_military_exemption: data.q_applied_military_exemption,
+      // Military Service
+      q_left_us_avoid_draft: data.q_left_us_avoid_draft,
+      q_applied_military_exemption: data.q_applied_military_exemption,
         q_served_us_military: data.q_served_us_military,
-        q_current_military_member: data.q_current_military_member,
-        q_scheduled_deploy: data.q_scheduled_deploy,
-        q_stationed_outside_us: data.q_stationed_outside_us,
-        q_former_military_outside_us: data.q_former_military_outside_us,
-        q_discharged_because_alien: data.q_discharged_because_alien,
-        q_court_martialed: data.q_court_martialed,
+      q_current_military_member: data.q_current_military_member,
+      q_scheduled_deploy: data.q_scheduled_deploy,
+      q_stationed_outside_us: data.q_stationed_outside_us,
+      q_former_military_outside_us: data.q_former_military_outside_us,
+      q_discharged_because_alien: data.q_discharged_because_alien,
+      q_court_martialed: data.q_court_martialed,
         q_deserted_military: data.q_deserted_military,
 
+      // Oath of Allegiance
+      q_support_constitution: data.q_support_constitution,
+      q_understand_oath: data.q_understand_oath,
+      q_unable_oath_disability: data.q_unable_oath_disability,
+      q_willing_take_oath: data.q_willing_take_oath,
+      q_willing_bear_arms: data.q_willing_bear_arms,
+      q_willing_noncombatant: data.q_willing_noncombatant,
+      q_willing_work_national_importance: data.q_willing_work_national_importance,
+
+      // Additional Information
+      additional_information: data.additional_information ? JSON.stringify(data.additional_information) : undefined,
+
+      // Draft metadata
+      current_step: currentStep,
+    }
+  }
+
+  function buildFormValues({ payload }: { payload: N400FormData }): FormData {
+    const {
+      id,
+      user_id,
+      status,
+      created_at,
+      updated_at,
+      current_step,
+      ...payloadValues
+    } = payload
+
+    const otherNames = parseJsonArray<OtherName>(payload.other_names)
+    const residenceAddresses = parseJsonArray<ResidenceAddress>(payload.residence_addresses)
+    const employmentHistory = parseJsonArray<EmploymentHistoryEntry>(payload.employment_history)
+    const trips = parseJsonArray<TripEntry>(payload.trips)
+    const children = parseJsonArray<ChildEntry>(payload.children)
+    const crimes = parseJsonArray<CrimeEntry>(payload.crimes)
+    const additionalInfo = parseJsonArray<AdditionalInformationEntry>(payload.additional_information)
+
+    return {
+      ...DEFAULT_FORM_VALUES,
+      ...(payloadValues as FormData),
+      other_names: otherNames ?? [],
+      residence_addresses: residenceAddresses ?? [],
+      employment_history: employmentHistory ?? [],
+      trips: trips ?? [],
+      children: children ?? [],
+      crimes: crimes ?? [],
+      additional_information: additionalInfo ?? [],
+    }
+  }
+
+  const handleSaveAndClose = async () => {
+    setAuthError(null)
+    setSaveNotice(null)
+    if (!session?.access_token) {
+      setAuthError("Please sign in again to save your progress.")
+      return
+    }
+
+    setIsSavingDraft(true)
+    try {
+      const payload = buildFormPayload({ data: getValues() })
+      const result = await saveN400Draft(payload, session.access_token)
+      if (result.success) {
+        setSavedDraftStep(currentStep)
+        setSaveNotice("Progress saved. You can safely sign out and return anytime.")
+        router.push("/")
+        return
+      }
+      if (result.error) setAuthError(result.error)
+    } catch (error) {
+      console.error("Draft save error:", error)
+      setAuthError("Unable to save your progress. Please try again.")
+    } finally {
+      setIsSavingDraft(false)
+    }
+  }
+
+  const onSubmit = async (data: FormData) => {
+    setAuthError(null);
+    if (!session?.access_token) {
+      setAuthError("Please sign in again to submit your form.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const payload = buildFormPayload({ data })
+      const result = await submitN400Form(payload, session.access_token);
+
+      if (!result.success || !result.data) {
+        if (result.error) setAuthError(result.error);
+        return;
+      }
+
+      const newId = result.data.id || null
+      setSubmittedId(newId);
+      setCurrentStep(13);
+
+      // Automatically generate and download PDF after successful submission
+      if (newId) {
+        await handleDownloadPDF(newId)
         // Oath of Allegiance
         q_support_constitution: data.q_support_constitution,
         q_understand_oath: data.q_understand_oath,
@@ -1440,7 +1398,7 @@ export default function N400Form() {
     }
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = async (formId?: string) => {
     setAuthError(null);
     if (!session?.access_token) {
       setAuthError("Please sign in again to download your PDF.");
@@ -1511,8 +1469,24 @@ export default function N400Form() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ formId: submittedId }),
+        body: JSON.stringify({ formId: formId ?? submittedId }),
       });
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null)
+        console.error("PDF generation failed:", errorPayload);
+        setAuthError("Unable to generate your PDF. Please try again.");
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `N-400_${watchedData.last_name}_${watchedData.first_name}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -1529,6 +1503,7 @@ export default function N400Form() {
       }
     } catch (error) {
       console.error("Download error:", error);
+      setAuthError("Unable to generate your PDF. Please check your connection and try again.");
       setAuthError("Failed to download PDF. Please try again.");
     } finally {
       setIsDownloading(false);
@@ -1536,6 +1511,25 @@ export default function N400Form() {
   };
 
   const currentStepData = STEPS[currentStep - 1];
+
+  const handleFormSubmit = handleSubmit(
+    onSubmit,
+    (formErrors) => {
+      // Collect a concise list of missing/invalid fields for the popup
+      const messages: string[] = [];
+      Object.entries(formErrors).forEach(([fieldName, error]) => {
+        if (!error) return;
+        const message =
+          (Array.isArray((error as any).types) && (error as any).types?.join(", ")) ||
+          ((error as any).message as string | undefined) ||
+          "This field is required";
+        messages.push(`${fieldName}: ${message}`);
+      });
+      setValidationMessages(messages);
+      setShowValidationModal(true);
+      setAuthError(null);
+    }
+  );
 
   // Info Icon Component with Tooltip
   const InfoIcon = ({ tooltip }: { tooltip: string }) => {
@@ -1696,7 +1690,26 @@ export default function N400Form() {
           <span className="logo-icon">◆</span>
           Meridian
         </div>
-        <button className="save-btn">SAVE AND CLOSE ✕</button>
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          {savedDraftStep && savedDraftStep !== currentStep && (
+            <button
+              type="button"
+              className="save-btn"
+              onClick={() => setCurrentStep(savedDraftStep)}
+              disabled={isLoadingDraft}
+            >
+              RETURN TO MY APPLICATION
+            </button>
+          )}
+          <button
+            type="button"
+            className="save-btn"
+            onClick={handleSaveAndClose}
+            disabled={isSavingDraft || isLoadingDraft}
+          >
+            {isSavingDraft ? "SAVING..." : "SAVE AND CLOSE ✕"}
+          </button>
+        </div>
       </header>
 
       {/* Main Container */}
@@ -1727,8 +1740,10 @@ export default function N400Form() {
             <GuidedPanel title={stepGuidance.panelTitle} items={stepGuidance.bullets} />
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={handleFormSubmit}>
             {authError && <p className="error-message">{authError}</p>}
+            {isLoadingDraft && <p className="helper-text">Loading saved draft...</p>}
+            {saveNotice && <p className="helper-text">{saveNotice}</p>}
             
             {/* ═══════════════════════════════════════════════════════════════ */}
             {/* STEP 1: ELIGIBILITY */}
@@ -3513,6 +3528,55 @@ export default function N400Form() {
           </form>
         </div>
       </div>
+
+      {/* Simple validation popup listing missing/invalid fields */}
+      {showValidationModal && validationMessages.length > 0 && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: "12px",
+              padding: "24px",
+              maxWidth: "480px",
+              width: "100%",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
+            }}
+          >
+            <h2 style={{ marginBottom: "8px" }}>Missing information</h2>
+            <p className="helper-text" style={{ marginBottom: "16px" }}>
+              Please fill in these fields, then click &quot;SUBMIT APPLICATION&quot; again.
+            </p>
+            <ul style={{ marginBottom: "16px", paddingLeft: "20px" }}>
+              {validationMessages.map(message => (
+                <li key={message} style={{ fontSize: "14px", marginBottom: "4px" }}>
+                  {message}
+                </li>
+              ))}
+            </ul>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+              <button
+                type="button"
+                className="btn-back"
+                onClick={() => setShowValidationModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Support Button */}
       <button className="support-btn" title="Get help">

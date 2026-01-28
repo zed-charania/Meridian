@@ -34,15 +34,6 @@ export async function POST(request: NextRequest) {
       if (error || !data) {
         return NextResponse.json({ error: "Form not found" }, { status: 404 });
       }
-
-      // Verify payment status
-      if (data.payment_status !== "paid") {
-        return NextResponse.json(
-          { error: "Payment required to download PDF" },
-          { status: 402 }
-        );
-      }
-
       dbData = data;
     } else {
       const { data, error } = await supabaseAdmin
@@ -56,19 +47,39 @@ export async function POST(request: NextRequest) {
       if (error || !data) {
         return NextResponse.json({ error: "No form submissions found" }, { status: 404 });
       }
-
-      // Verify payment status
-      if (data.payment_status !== "paid") {
-        return NextResponse.json(
-          { error: "Payment required to download PDF" },
-          { status: 402 }
-        );
-      }
-
       dbData = data;
     }
 
-    const payload = dbData?.payload ?? dbData;
+    const rawPayload = dbData?.payload ?? dbData;
+
+    // Normalize payload for Python API:
+    // - Some fields are stored as JSON strings in Supabase (e.g. residence_addresses, employment_history, trips, children, crimes, additional_information).
+    // - The Python service expects arrays of objects, not JSON strings.
+    const arrayFields = [
+      "residence_addresses",
+      "employment_history",
+      "trips",
+      "children",
+      "crimes",
+      "additional_information",
+    ] as const;
+
+    type ArrayFieldKey = (typeof arrayFields)[number];
+
+    const payload: Record<string, unknown> = { ...(rawPayload as Record<string, unknown>) };
+    arrayFields.forEach((key: ArrayFieldKey) => {
+      const value = payload[key];
+      if (typeof value === "string") {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) {
+            payload[key] = parsed;
+          }
+        } catch {
+          // If parsing fails, leave as-is; Python side will handle or log the mismatch.
+        }
+      }
+    });
 
     // Call Python PDF API
     const pdfResponse = await fetch(`${PDF_API_URL}/generate`, {
