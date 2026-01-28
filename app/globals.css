@@ -93,7 +93,8 @@ body {
   padding: 64px 80px 80px;
   max-width: 900px;
   width: 100%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  box-shadow: 0 18px 45px rgba(17, 24, 39, 0.08);
   transition: opacity 0.3s ease, transform 0.3s ease;
   margin: 0 auto;
   position: relative;
@@ -272,16 +273,21 @@ h1 {
   font-size: 14px;
   font-weight: 500;
   color: var(--dark);
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.02), rgba(17, 24, 39, 0.01));
+  box-shadow: 0 6px 14px rgba(17, 24, 39, 0.06);
 }
 
 .radio-option input[type="radio"]:checked + .radio-label {
   background: var(--dark);
   color: white;
   border-color: var(--dark);
+  box-shadow: 0 12px 24px rgba(17, 24, 39, 0.2);
+  transform: translateY(-1px);
 }
 
 .radio-label:hover {
   border-color: var(--dark);
+  transform: translateY(-1px);
 }
 
 /* Helper Text */
@@ -497,10 +503,13 @@ h1 {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.02), rgba(17, 24, 39, 0.01));
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.06);
 }
 
 .checkbox-group:hover {
   border-color: var(--dark);
+  transform: translateY(-1px);
 }
 
 .checkbox-group input[type="checkbox"] {
@@ -532,4 +541,190 @@ h1 {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* MERIDIAN GUIDANCE PATTERN STYLES */
+/* ═══════════════════════════════════════════════════════════════ */
+
+/* Guidance Header */
+.guidance-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.guidance-title {
+  font-size: 32px;
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 16px;
+  letter-spacing: -0.5px;
+  line-height: 1.3;
+  color: var(--dark);
+}
+
+@media (max-width: 768px) {
+  .guidance-title {
+    font-size: 28px;
+  }
+}
+
+.guidance-intent {
+  font-size: 15px;
+  color: var(--gray);
+  margin-bottom: 8px;
+  line-height: 1.6;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.guidance-guardrail {
+  font-size: 14px;
+  color: var(--gray);
+  margin-bottom: 16px;
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* USCIS Wording Toggle */
+.guidance-uscis-toggle {
+  margin-top: 16px;
+}
+
+.guidance-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Inter', sans-serif;
+}
+
+.guidance-toggle-btn:hover {
+  background: var(--bg);
+  border-color: var(--gray);
+  color: var(--dark);
+}
+
+.guidance-uscis-text {
+  margin-top: 12px;
+  padding: 16px 20px;
+  background: var(--bg);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--gray);
+  line-height: 1.6;
+  text-align: left;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Guided Panel */
+.guided-panel {
+  margin: 0 auto 32px;
+  max-width: 760px;
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.04), rgba(17, 24, 39, 0.02));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 22px;
+}
+
+.guided-panel-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--gray);
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.guided-panel-list {
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+  margin: 0;
+  color: var(--dark);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Ever Callout */
+.ever-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  background: #FEF3C7;
+  border: 1px solid #F59E0B;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.ever-callout-icon {
+  flex-shrink: 0;
+  color: #D97706;
+  margin-top: 1px;
+}
+
+.ever-callout-text {
+  font-size: 14px;
+  color: #92400E;
+  line-height: 1.5;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* Question Item with Guidance */
+.question-with-guidance {
+  margin-bottom: 24px;
+}
+
+.question-intent {
+  font-size: 13px;
+  color: var(--gray);
+  margin-top: 6px;
+  margin-bottom: 6px;
+  line-height: 1.5;
+  max-width: 720px;
+}
+
+.question-guardrail {
+  font-size: 12px;
+  color: var(--gray);
+  margin-top: 2px;
+  margin-bottom: 12px;
+  font-style: italic;
+  max-width: 720px;
+}
+
+/* Section Divider with Title */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 32px 0 24px;
+}
+
+.section-divider::before,
+.section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--light-gray);
+}
+
+.section-divider-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dark);
+  white-space: nowrap;
 }

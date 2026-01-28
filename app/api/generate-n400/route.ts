@@ -34,6 +34,15 @@ export async function POST(request: NextRequest) {
       if (error || !data) {
         return NextResponse.json({ error: "Form not found" }, { status: 404 });
       }
+
+      // Verify payment status
+      if (data.payment_status !== "paid") {
+        return NextResponse.json(
+          { error: "Payment required to download PDF" },
+          { status: 402 }
+        );
+      }
+
       dbData = data;
     } else {
       const { data, error } = await supabaseAdmin
@@ -47,6 +56,15 @@ export async function POST(request: NextRequest) {
       if (error || !data) {
         return NextResponse.json({ error: "No form submissions found" }, { status: 404 });
       }
+
+      // Verify payment status
+      if (data.payment_status !== "paid") {
+        return NextResponse.json(
+          { error: "Payment required to download PDF" },
+          { status: 402 }
+        );
+      }
+
       dbData = data;
     }
 

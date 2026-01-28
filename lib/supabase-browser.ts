@@ -1,11 +1,17 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+
+let supabaseInstance: SupabaseClient | null = null;
 
 export function getSupabaseBrowserClient() {
+  if (supabaseInstance) {
+    return supabaseInstance;
+  }
+
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     throw new Error("Missing Supabase environment variables for browser client");
   }
 
-  return createClient(
+  supabaseInstance = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
@@ -16,5 +22,7 @@ export function getSupabaseBrowserClient() {
       },
     }
   );
+
+  return supabaseInstance;
 }
 
