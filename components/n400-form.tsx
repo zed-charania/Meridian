@@ -1610,10 +1610,10 @@ export default function N400Form() {
     const meta = getQuestionMeta(id);
     if (!meta?.intent && !meta?.guardrail) return null;
     return (
-      <>
+      <div className="question-guidance-card">
         {meta?.intent && <p className="question-intent">{meta.intent}</p>}
         {meta?.guardrail && <p className="question-guardrail">{meta.guardrail}</p>}
-      </>
+      </div>
     );
   };
 
@@ -1669,22 +1669,13 @@ export default function N400Form() {
             {finalTooltip && <InfoIcon tooltip={finalTooltip} />}
           </label>
           {showReviewLater && (
-            <label className="review-later-toggle" style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              fontSize: "12px",
-              color: isFlagged ? "var(--primary)" : "var(--gray)",
-              cursor: "pointer",
-              whiteSpace: "nowrap"
-            }}>
+            <label className={`review-later-toggle ${isFlagged ? 'is-flagged' : ''}`}>
               <input
                 type="checkbox"
                 checked={isFlagged || false}
                 onChange={() => toggleReviewLater(questionId)}
-                style={{ width: "14px", height: "14px", accentColor: "var(--primary)" }}
               />
-              Review later
+              {isFlagged ? '⚑ Flagged' : 'Review later'}
             </label>
           )}
         </div>
@@ -1721,45 +1712,23 @@ export default function N400Form() {
         </div>
         {/* Explanation Required Notice */}
         {shouldShowPrompt && (
-          <div className="explanation-notice" style={{
-            marginTop: "12px",
-            padding: "12px 16px",
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            borderRadius: "8px",
-            fontSize: "14px"
-          }}>
-            <p style={{ margin: "0 0 12px 0", color: "var(--dark)" }}>
-              This response requires an explanation in Part 14 (Additional Information). You can add it now or later.
+          <div className="explanation-notice">
+            <p>
+              <span className="explanation-notice-icon">!</span>
+              This response may require an explanation in Part 14 (Additional Information).
             </p>
-            <div style={{ display: "flex", gap: "8px" }}>
+            <div className="explanation-notice-buttons">
               <button
                 type="button"
+                className="btn-primary"
                 onClick={() => handleAddExplanationNow(questionId)}
-                style={{
-                  padding: "8px 16px",
-                  background: "var(--primary)",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  fontSize: "13px",
-                  cursor: "pointer"
-                }}
               >
                 Add explanation now
               </button>
               <button
                 type="button"
+                className="btn-secondary"
                 onClick={() => handleAddExplanationLater(questionId)}
-                style={{
-                  padding: "8px 16px",
-                  background: "white",
-                  color: "var(--dark)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "6px",
-                  fontSize: "13px",
-                  cursor: "pointer"
-                }}
               >
                 Add later
               </button>
@@ -1819,33 +1788,11 @@ export default function N400Form() {
 
       {/* Draft Indicator */}
       {currentStep < 17 && (
-        <div className="draft-indicator" style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "8px",
-          padding: "10px 16px",
-          background: "var(--bg)",
-          borderBottom: "1px solid var(--border)",
-          fontSize: "13px",
-          color: "var(--gray)"
-        }}>
-          <span style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-            padding: "2px 8px",
-            background: "var(--primary)",
-            color: "white",
-            borderRadius: "4px",
-            fontSize: "11px",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.5px"
-          }}>
-            Draft
-          </span>
-          <span>Nothing is submitted until you generate and review your PDF.</span>
+        <div className="container" style={{ paddingTop: "24px", paddingBottom: "0" }}>
+          <div className="draft-indicator">
+            <span className="draft-badge">Draft</span>
+            <span className="draft-message">Nothing is submitted until you generate and review your PDF.</span>
+          </div>
         </div>
       )}
 
@@ -2313,37 +2260,6 @@ export default function N400Form() {
               </>
             )}
 
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* STEP 4: CONTACT INFORMATION (Part 4) */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {currentStep === 4 && (
-              <>
-                <div className="form-row-equal">
-                  <div className="form-group">
-                    <label className="form-label">Daytime Phone Number</label>
-                    <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("daytime_phone")} />
-                    {errors.daytime_phone && <p className="error-message">{errors.daytime_phone.message}</p>}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">{labelFor("mobile_phone", "Mobile Phone Number (if any)")}</label>
-                    {renderQuestionGuidance("mobile_phone")}
-                    <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("mobile_phone")} />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">{labelFor("email", "Email Address (if any)")}</label>
-                  {renderQuestionGuidance("email")}
-                  <input type="email" className="form-input" placeholder="you@example.com" {...register("email")} />
-                  <p className="helper-text">USCIS may contact you at this email address</p>
-                  {errors.email && <p className="error-message">{errors.email.message}</p>}
-                </div>
-              </>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* STEP 5: RESIDENCE INFORMATION (Part 4) */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
             {/* ═══════════════════════════════════════════════════════════════ */}
             {/* STEP 5: RESIDENCE (Part 4) */}
             {/* ═══════════════════════════════════════════════════════════════ */}
@@ -3547,20 +3463,20 @@ export default function N400Form() {
               <>
                 {/* Flagged for Review Section */}
                 {Object.entries(reviewLater).filter(([, flagged]) => flagged).length > 0 && (
-                  <div style={{ marginBottom: "24px", padding: "16px", background: "#FEF3C7", borderRadius: "8px", border: "1px solid #F59E0B" }}>
-                    <h3 style={{ fontSize: "16px", fontWeight: "600", color: "#92400E", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ fontSize: "18px" }}>⚠️</span> Flagged for Review
+                  <div className="review-alert-section warning">
+                    <h3 className="review-alert-title">
+                      <span>⚠️</span> Flagged for Review
                     </h3>
-                    <p style={{ fontSize: "14px", color: "#92400E", marginBottom: "12px" }}>
+                    <p className="review-alert-description">
                       You marked the following questions for later review. Consider revisiting them before submitting.
                     </p>
-                    <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                    <ul className="review-alert-list">
                       {Object.entries(reviewLater)
                         .filter(([, flagged]) => flagged)
                         .map(([questionId]) => {
                           const meta = getQuestionMeta(questionId);
                           return (
-                            <li key={questionId} style={{ fontSize: "14px", color: "#78350F", marginBottom: "4px" }}>
+                            <li key={questionId}>
                               {meta?.title || questionId}
                             </li>
                           );
@@ -3568,8 +3484,8 @@ export default function N400Form() {
                     </ul>
                     <button
                       type="button"
+                      className="review-alert-btn"
                       onClick={() => goToStep(10)}
-                      style={{ marginTop: "12px", padding: "8px 16px", background: "#F59E0B", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontWeight: "500" }}
                     >
                       Review Background Questions
                     </button>
@@ -3587,24 +3503,24 @@ export default function N400Form() {
                   if (missingExplanations.length === 0) return null;
 
                   return (
-                    <div style={{ marginBottom: "24px", padding: "16px", background: "#FEE2E2", borderRadius: "8px", border: "1px solid #EF4444" }}>
-                      <h3 style={{ fontSize: "16px", fontWeight: "600", color: "#991B1B", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontSize: "18px" }}>📝</span> Explanations Needed
+                    <div className="review-alert-section error">
+                      <h3 className="review-alert-title">
+                        <span>📝</span> Explanations Needed
                       </h3>
-                      <p style={{ fontSize: "14px", color: "#991B1B", marginBottom: "12px" }}>
+                      <p className="review-alert-description">
                         You answered "Yes" to the following questions that may require additional explanation in Part 14.
                       </p>
-                      <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                      <ul className="review-alert-list">
                         {missingExplanations.map((question) => (
-                          <li key={question.id} style={{ fontSize: "14px", color: "#7F1D1D", marginBottom: "4px" }}>
+                          <li key={question.id}>
                             {question.title || question.id}
                           </li>
                         ))}
                       </ul>
                       <button
                         type="button"
+                        className="review-alert-btn"
                         onClick={() => goToStep(15)}
-                        style={{ marginTop: "12px", padding: "8px 16px", background: "#EF4444", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontWeight: "500" }}
                       >
                         Add Explanations (Part 14)
                       </button>
