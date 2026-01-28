@@ -746,6 +746,97 @@ const DEFAULT_FORM_VALUES: FormData = {
   additional_information: [],
 }
 
+function buildSampleFormValues(): Partial<FormData> {
+  return {
+    eligibility_basis: "5year",
+    last_name: "Johnson",
+    first_name: "Alicia",
+    middle_name: "Marie",
+    date_of_birth: "1989-07-22",
+    country_of_birth: "Brazil",
+    country_of_citizenship: "Brazil",
+    gender: "female",
+    date_became_permanent_resident: "2018-05-14",
+    daytime_phone: "(555) 123-4567",
+    email: "alicia.johnson@example.com",
+    a_number: "A123456789",
+    uscis_account_number: "USC1234567890",
+    ssa_wants_card: "no",
+    ssa_consent_disclosure: "no",
+    street_address: "742 Evergreen Terrace",
+    apt_ste_flr: "4B",
+    city: "Seattle",
+    state: "WA",
+    zip_code: "98101",
+    residence_from: "06/01/2019",
+    residence_to: "PRESENT",
+    mailing_same_as_residence: "no",
+    mailing_street_address: "PO Box 12345",
+    mailing_apt_ste_flr: "",
+    mailing_in_care_of: "John Johnson",
+    mailing_city: "Seattle",
+    mailing_state: "WA",
+    mailing_zip_code: "98111",
+    ethnicity: "hispanic",
+    race: "white",
+    height_feet: "5",
+    height_inches: "6",
+    weight: "135",
+    eye_color: "Brown",
+    hair_color: "Brown",
+    marital_status: "married",
+    // Common yes/no defaults so submit doesn't feel "blocked"
+    has_used_other_names: "no",
+    wants_name_change: "no",
+    trips_over_6_months: "no",
+    q_arrested: "no",
+    q_committed_crime_not_arrested: "no",
+
+    // Useful defaults for later yes/no flows (keeps submit from feeling like a no-op)
+    request_disability_accommodations: "no",
+    q_failed_to_file_taxes: "no",
+    q_owe_taxes: "no",
+    q_voted_in_us: "no",
+
+    // Provide at least one prior residence/employment/trip entry so PDF tables have something
+    residence_addresses: [
+      {
+        street_address: "742 Evergreen Terrace",
+        apt_ste_flr: "4B",
+        city: "Seattle",
+        state: "WA",
+        zip_code: "98101",
+        country: "United States",
+        dates_from: "2019-06-01",
+        dates_to: "PRESENT",
+      },
+    ],
+    employment_history: [
+      {
+        employer_or_school: "Acme Corp",
+        occupation_or_field: "Software Engineer",
+        city: "Seattle",
+        state: "WA",
+        zip_code: "98101",
+        country: "United States",
+        province: "",
+        postal_code: "",
+        dates_from: "2020-01-01",
+        dates_to: "PRESENT",
+      },
+    ],
+    trips: [
+      {
+        date_left_us: "2022-06-01",
+        date_returned_us: "2022-06-10",
+        countries_traveled: "Canada",
+      },
+    ],
+    total_days_outside_us: "9",
+    total_children: "0",
+  }
+}
+
 export default function N400Form() {
   const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -762,6 +853,7 @@ export default function N400Form() {
   const [savedDraftStep, setSavedDraftStep] = useState<number | null>(null);
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationMessages, setValidationMessages] = useState<string[]>([]);
+  const [isTocCollapsed, setIsTocCollapsed] = useState(false)
   const router = useRouter();
   // Review Later: track flagged questions by ID
   const [reviewLater, setReviewLater] = useState<Record<string, boolean>>({});
@@ -787,6 +879,23 @@ export default function N400Form() {
 
   const watchedData = watch();
   const progress = (currentStep / STEPS.length) * 100;
+
+  const handleAutofillSample = () => {
+    setAuthError(null)
+    setSaveNotice(null)
+    const sample = buildSampleFormValues()
+    reset({
+      ...getValues(),
+      ...sample,
+    })
+  }
+
+  const handleJumpToStep = (step: number) => {
+    if (!Number.isFinite(step)) return
+    setAuthError(null)
+    setShowValidationModal(false)
+    setCurrentStep(Math.min(Math.max(step, 1), STEPS.length))
+  }
 
   useEffect(() => {
     let isActive = true;
@@ -1758,6 +1867,91 @@ export default function N400Form() {
       {/* Progress Bar */}
       <div className="progress-bar" style={{ width: `${progress}%` }} />
 
+      {/* Table of contents (fixed left, does not affect form layout) */}
+      <nav
+        aria-label="Table of contents"
+        style={{
+          position: "fixed",
+          left: 16,
+          top: 120,
+          width: 260,
+          maxHeight: isTocCollapsed ? 52 : "calc(100vh - 160px)",
+          overflowY: "auto",
+          padding: 12,
+          border: "1px solid var(--light-gray)",
+          borderRadius: 12,
+          background: "rgba(255,255,255,0.9)",
+          backdropFilter: "blur(10px)",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+          zIndex: 10,
+          display: "none",
+          transform: "none",
+          transition: "max-height 180ms ease",
+        }}
+        className="toc-sidebar"
+      >
+        <button
+          type="button"
+          onClick={() => setIsTocCollapsed(!isTocCollapsed)}
+          aria-label={isTocCollapsed ? "Expand table of contents" : "Collapse table of contents"}
+          style={{
+            position: "absolute",
+            top: 10,
+            right: 10,
+            width: 24,
+            height: 24,
+            borderRadius: 999,
+            border: "1px solid var(--light-gray)",
+            background: "white",
+            cursor: "pointer",
+            fontSize: 14,
+            lineHeight: "22px",
+            padding: 0,
+            color: "var(--gray)",
+          }}
+        >
+          {isTocCollapsed ? "▾" : "▴"}
+        </button>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--gray)", marginBottom: 10 }}>
+          Table of contents
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {STEPS.filter(step => step.id !== 17).map((step) => {
+            const label = step.part
+              ? `${step.part}: ${step.title}`
+              : `${step.section}: ${step.title}`
+            const isActive = currentStep === step.id
+            const isLocked = step.id === 16 && currentStep < 16
+            return (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => {
+                  if (isLocked) return
+                  handleJumpToStep(step.id)
+                }}
+                style={{
+                  textAlign: "left",
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  border: "1px solid transparent",
+                  background: isActive ? "var(--light-gray)" : "transparent",
+                  color: "var(--dark)",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  lineHeight: 1.25,
+                  filter: isLocked ? "blur(1.25px)" : undefined,
+                  opacity: isLocked ? 0.5 : 1,
+                  pointerEvents: isLocked ? "none" : "auto",
+                }}
+              >
+                <div style={{ fontWeight: isActive ? 700 : 600 }}>{label}</div>
+              </button>
+            )
+          })}
+        </div>
+      </nav>
+
       {/* Header */}
       <header className="header">
         <div className="logo">
@@ -1765,6 +1959,31 @@ export default function N400Form() {
           Meridian
         </div>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          {session && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--gray)" }}>
+              <span style={{ opacity: 0.8 }}>Signed in</span>
+              <span style={{ fontWeight: 500, maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {session.user.email}
+              </span>
+              <button
+                type="button"
+                className="btn-back"
+                onClick={async () => {
+                  setAuthError(null)
+                  const supabase = getSupabaseBrowserClient()
+                  const { error } = await supabase.auth.signOut()
+                  if (error) {
+                    setAuthError(error.message)
+                    return
+                  }
+                  window.location.href = "/"
+                }}
+                style={{ padding: "4px 8px", fontSize: 12 }}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
           {savedDraftStep && savedDraftStep !== currentStep && (
             <button
               type="button"
@@ -1786,15 +2005,7 @@ export default function N400Form() {
         </div>
       </header>
 
-      {/* Draft Indicator */}
-      {currentStep < 17 && (
-        <div className="container" style={{ paddingTop: "24px", paddingBottom: "0" }}>
-          <div className="draft-indicator">
-            <span className="draft-badge">Draft</span>
-            <span className="draft-message">Nothing is submitted until you generate and review your PDF.</span>
-          </div>
-        </div>
-      )}
+      {/* Draft Indicator removed (too noisy) */}
 
       {/* Main Container */}
       <div className="container">
@@ -1828,6 +2039,12 @@ export default function N400Form() {
             {authError && <p className="error-message">{authError}</p>}
             {isLoadingDraft && <p className="helper-text">Loading saved draft...</p>}
             {saveNotice && <p className="helper-text">{saveNotice}</p>}
+
+            <div className="button-row" style={{ marginBottom: 12 }}>
+              <button type="button" className="btn-back" onClick={handleAutofillSample}>
+                Autofill sample data
+              </button>
+            </div>
             
             {/* ═══════════════════════════════════════════════════════════════ */}
             {/* STEP 1: ELIGIBILITY */}
@@ -3702,6 +3919,18 @@ export default function N400Form() {
       <button className="support-btn" title="Get help">
         <HelpCircle size={24} />
       </button>
+
+      {/* Sidebar responsive behavior: show on desktop only */}
+      <style jsx global>{`
+        @media (min-width: 1100px) {
+          .toc-sidebar {
+            display: block !important;
+          }
+          .toc-tab {
+            display: block !important;
+          }
+        }
+      `}</style>
     </>
   );
 }

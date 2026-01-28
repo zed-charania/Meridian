@@ -95,23 +95,9 @@ export function AuthGate({ children }: AuthGateProps) {
   }
 
   return (
-    <div>
-      <div className="container" style={{ marginBottom: 16 }}>
-        <div className="form-card" style={{ padding: "16px 24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <strong>Signed in</strong>
-              <div className="helper-text">{session.user.email}</div>
-            </div>
-            <button className="btn-back" type="button" onClick={handleSignOut}>
-              Sign out
-            </button>
-          </div>
-          {authError && <p className="error-message">{authError}</p>}
-        </div>
-      </div>
+    <>
       {children}
-    </div>
+    </>
   );
 }
 
