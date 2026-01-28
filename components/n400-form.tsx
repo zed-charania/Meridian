@@ -1377,19 +1377,6 @@ export default function N400Form() {
       // Automatically generate and download PDF after successful submission
       if (newId) {
         await handleDownloadPDF(newId)
-        // Oath of Allegiance
-        q_support_constitution: data.q_support_constitution,
-        q_understand_oath: data.q_understand_oath,
-        q_unable_oath_disability: data.q_unable_oath_disability,
-        q_willing_take_oath: data.q_willing_take_oath,
-        q_willing_bear_arms: data.q_willing_bear_arms,
-        q_willing_noncombatant: data.q_willing_noncombatant,
-        q_willing_work_national_importance: data.q_willing_work_national_importance,
-      }, session.access_token);
-
-      if (result.success && result.data) {
-        setSubmittedId(result.data.id || null);
-        setCurrentStep(17); // Go to completion step
       }
     } catch (error) {
       console.error("Submission error:", error);
