@@ -763,6 +763,10 @@ export default function N400Form() {
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationMessages, setValidationMessages] = useState<string[]>([]);
   const router = useRouter();
+  // Review Later: track flagged questions by ID
+  const [reviewLater, setReviewLater] = useState<Record<string, boolean>>({});
+  // Track which explanation_required questions need prompts shown
+  const [showExplanationPrompt, setShowExplanationPrompt] = useState<Record<string, boolean>>({});
   const supabase = getSupabaseBrowserClient();
 
   const {
@@ -1109,7 +1113,7 @@ export default function N400Form() {
         // ═══════════════════════════════════════════════════════════════
         daytime_phone: data.daytime_phone,
         mobile_phone: data.mobile_phone,
-        email: data.email,
+        email: data.email || "",
 
         // ═══════════════════════════════════════════════════════════════
         // PART 5: RESIDENCE INFORMATION
@@ -1161,7 +1165,7 @@ export default function N400Form() {
         // PART 9: TIME OUTSIDE THE US
         // ═══════════════════════════════════════════════════════════════
         total_days_outside_us: data.total_days_outside_us,
-        trips_over_6_months: data.trips_over_6_months,
+        trips_over_6_months: data.trips_over_6_months ?? undefined,
       trips: data.trips ? JSON.stringify(data.trips) : undefined,
 
         // ═══════════════════════════════════════════════════════════════
@@ -1615,39 +1619,153 @@ export default function N400Form() {
 
   const labelFor = (id: string, fallback: string) => getQuestionMeta(id)?.title || fallback;
 
+  // Toggle review later flag for a question
+  const toggleReviewLater = (questionId: string) => {
+    setReviewLater((prev) => ({ ...prev, [questionId]: !prev[questionId] }));
+  };
+
+  // Handle "Add later" for explanation_required questions
+  const handleAddExplanationLater = (questionId: string) => {
+    setReviewLater((prev) => ({ ...prev, [questionId]: true }));
+    setShowExplanationPrompt((prev) => ({ ...prev, [questionId]: false }));
+  };
+
+  // Handle "Add explanation now" - go to Step 15
+  const handleAddExplanationNow = (questionId: string) => {
+    setShowExplanationPrompt((prev) => ({ ...prev, [questionId]: false }));
+    setCurrentStep(15);
+  };
+
   // Helper component for Yes/No radio buttons with optional tooltip
   const YesNoField = ({
     name,
     label,
     tooltip,
     metaId,
+    showReviewLater = false,
   }: {
     name: keyof FormData;
     label?: string;
     tooltip?: string;
     metaId?: string;
+    showReviewLater?: boolean;
   }) => {
     const meta = getQuestionMeta(metaId);
     const finalLabel = meta?.title || label || "";
     const finalTooltip = tooltip ?? meta?.uscis_text;
+    const questionId = metaId || name;
+    const currentValue = watchedData[name];
+    const needsExplanation = meta?.explanation_required && currentValue === "yes";
+    const isFlagged = reviewLater[questionId];
+
+    // Show explanation prompt when user selects "Yes" on explanation_required question
+    const shouldShowPrompt = needsExplanation && showExplanationPrompt[questionId];
 
     return (
       <div className="form-group question-with-guidance">
-        <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
-          {finalLabel}
-          {finalTooltip && <InfoIcon tooltip={finalTooltip} />}
-        </label>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
+          <label className="form-label" style={{ display: "flex", alignItems: "center", flex: 1 }}>
+            {finalLabel}
+            {finalTooltip && <InfoIcon tooltip={finalTooltip} />}
+          </label>
+          {showReviewLater && (
+            <label className="review-later-toggle" style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "12px",
+              color: isFlagged ? "var(--primary)" : "var(--gray)",
+              cursor: "pointer",
+              whiteSpace: "nowrap"
+            }}>
+              <input
+                type="checkbox"
+                checked={isFlagged || false}
+                onChange={() => toggleReviewLater(questionId)}
+                style={{ width: "14px", height: "14px", accentColor: "var(--primary)" }}
+              />
+              Review later
+            </label>
+          )}
+        </div>
         {renderQuestionGuidance(metaId)}
         <div className="radio-group">
           <div className="radio-option">
-            <input type="radio" id={`${name}-yes`} value="yes" {...register(name)} />
+            <input
+              type="radio"
+              id={`${name}-yes`}
+              value="yes"
+              {...register(name, {
+                onChange: () => {
+                  if (meta?.explanation_required) {
+                    setShowExplanationPrompt((prev) => ({ ...prev, [questionId]: true }));
+                  }
+                }
+              })}
+            />
             <label htmlFor={`${name}-yes`} className="radio-label">Yes</label>
           </div>
           <div className="radio-option">
-            <input type="radio" id={`${name}-no`} value="no" {...register(name)} />
+            <input
+              type="radio"
+              id={`${name}-no`}
+              value="no"
+              {...register(name, {
+                onChange: () => {
+                  setShowExplanationPrompt((prev) => ({ ...prev, [questionId]: false }));
+                }
+              })}
+            />
             <label htmlFor={`${name}-no`} className="radio-label">No</label>
           </div>
         </div>
+        {/* Explanation Required Notice */}
+        {shouldShowPrompt && (
+          <div className="explanation-notice" style={{
+            marginTop: "12px",
+            padding: "12px 16px",
+            background: "var(--bg)",
+            border: "1px solid var(--border)",
+            borderRadius: "8px",
+            fontSize: "14px"
+          }}>
+            <p style={{ margin: "0 0 12px 0", color: "var(--dark)" }}>
+              This response requires an explanation in Part 14 (Additional Information). You can add it now or later.
+            </p>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => handleAddExplanationNow(questionId)}
+                style={{
+                  padding: "8px 16px",
+                  background: "var(--primary)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  cursor: "pointer"
+                }}
+              >
+                Add explanation now
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddExplanationLater(questionId)}
+                style={{
+                  padding: "8px 16px",
+                  background: "white",
+                  color: "var(--dark)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  cursor: "pointer"
+                }}
+              >
+                Add later
+              </button>
+            </div>
+          </div>
+        )}
         {errors[name] && <p className="error-message">{errors[name]?.message}</p>}
       </div>
     );
@@ -1698,6 +1816,38 @@ export default function N400Form() {
           </button>
         </div>
       </header>
+
+      {/* Draft Indicator */}
+      {currentStep < 17 && (
+        <div className="draft-indicator" style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+          padding: "10px 16px",
+          background: "var(--bg)",
+          borderBottom: "1px solid var(--border)",
+          fontSize: "13px",
+          color: "var(--gray)"
+        }}>
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            padding: "2px 8px",
+            background: "var(--primary)",
+            color: "white",
+            borderRadius: "4px",
+            fontSize: "11px",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.5px"
+          }}>
+            Draft
+          </span>
+          <span>Nothing is submitted until you generate and review your PDF.</span>
+        </div>
+      )}
 
       {/* Main Container */}
       <div className="container">
@@ -2807,56 +2957,56 @@ export default function N400Form() {
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>General Eligibility</h3>
-                  <YesNoField name="q_claimed_us_citizen" metaId="q_claimed_us_citizen" label="Have you ever claimed to be a U.S. citizen?" />
-                  <YesNoField name="q_voted_in_us" metaId="q_voted_in_us" label="Have you ever registered to vote or voted in a U.S. election?" />
-                  <YesNoField name="q_failed_to_file_taxes" metaId="q_failed_to_file_taxes" label="Have you ever failed to file a tax return?" />
-                  <YesNoField name="q_nonresident_alien_tax" metaId="q_nonresident_alien_tax" label="Did you call yourself a 'nonresident alien' on a tax return?" />
-                  <YesNoField name="q_owe_taxes" metaId="q_owe_taxes" label="Do you currently owe overdue taxes?" />
+                  <YesNoField name="q_claimed_us_citizen" metaId="q_claimed_us_citizen" label="Have you ever claimed to be a U.S. citizen?" showReviewLater />
+                  <YesNoField name="q_voted_in_us" metaId="q_voted_in_us" label="Have you ever registered to vote or voted in a U.S. election?" showReviewLater />
+                  <YesNoField name="q_failed_to_file_taxes" metaId="q_failed_to_file_taxes" label="Have you ever failed to file a tax return?" showReviewLater />
+                  <YesNoField name="q_nonresident_alien_tax" metaId="q_nonresident_alien_tax" label="Did you call yourself a 'nonresident alien' on a tax return?" showReviewLater />
+                  <YesNoField name="q_owe_taxes" metaId="q_owe_taxes" label="Do you currently owe overdue taxes?" showReviewLater />
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Affiliations and Associations</h3>
-                  <YesNoField name="q_communist_party" metaId="q_communist_party" label="Have you ever been associated with a Communist or totalitarian party?" />
-                  <YesNoField name="q_advocated_overthrow" metaId="q_advocated_overthrow" label="Have you ever advocated the overthrow of the U.S. government?" />
-                  <YesNoField name="q_terrorist_org" metaId="q_terrorist_org" label="Have you ever been associated with or supported a terrorist organization?" />
+                  <YesNoField name="q_communist_party" metaId="q_communist_party" label="Have you ever been associated with a Communist or totalitarian party?" showReviewLater />
+                  <YesNoField name="q_advocated_overthrow" metaId="q_advocated_overthrow" label="Have you ever advocated the overthrow of the U.S. government?" showReviewLater />
+                  <YesNoField name="q_terrorist_org" metaId="q_terrorist_org" label="Have you ever been associated with or supported a terrorist organization?" showReviewLater />
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Violence and Harm</h3>
-                  <YesNoField name="q_used_weapon_explosive" metaId="q_used_weapon_explosive" label="Have you ever used a weapon or explosive to harm someone or damage property?" />
-                  <YesNoField name="q_kidnapping_assassination_hijacking" metaId="q_kidnapping_assassination_hijacking" label="Have you ever engaged in kidnapping, assassination, or hijacking?" />
-                  <YesNoField name="q_threatened_weapon_violence" metaId="q_threatened_weapon_violence" label="Have you ever threatened or planned violence with weapons?" />
-                  <YesNoField name="q_genocide" metaId="q_genocide" label="Have you ever participated in genocide?" />
-                  <YesNoField name="q_torture" metaId="q_torture" label="Have you ever participated in torture?" />
-                  <YesNoField name="q_killing_person" metaId="q_killing_person" label="Have you ever participated in killing or trying to kill someone?" />
-                  <YesNoField name="q_sexual_contact_nonconsent" metaId="q_sexual_contact_nonconsent" label="Have you ever had non-consensual sexual contact?" />
-                  <YesNoField name="q_severely_injuring" metaId="q_severely_injuring" label="Have you ever intentionally and severely injured someone?" />
-                  <YesNoField name="q_religious_persecution" metaId="q_religious_persecution" label="Have you ever prevented someone from practicing their religion?" />
-                  <YesNoField name="q_harm_race_religion" metaId="q_harm_race_religion" label="Have you ever harmed someone because of their race, religion, or political opinion?" />
+                  <YesNoField name="q_used_weapon_explosive" metaId="q_used_weapon_explosive" label="Have you ever used a weapon or explosive to harm someone or damage property?" showReviewLater />
+                  <YesNoField name="q_kidnapping_assassination_hijacking" metaId="q_kidnapping_assassination_hijacking" label="Have you ever engaged in kidnapping, assassination, or hijacking?" showReviewLater />
+                  <YesNoField name="q_threatened_weapon_violence" metaId="q_threatened_weapon_violence" label="Have you ever threatened or planned violence with weapons?" showReviewLater />
+                  <YesNoField name="q_genocide" metaId="q_genocide" label="Have you ever participated in genocide?" showReviewLater />
+                  <YesNoField name="q_torture" metaId="q_torture" label="Have you ever participated in torture?" showReviewLater />
+                  <YesNoField name="q_killing_person" metaId="q_killing_person" label="Have you ever participated in killing or trying to kill someone?" showReviewLater />
+                  <YesNoField name="q_sexual_contact_nonconsent" metaId="q_sexual_contact_nonconsent" label="Have you ever had non-consensual sexual contact?" showReviewLater />
+                  <YesNoField name="q_severely_injuring" metaId="q_severely_injuring" label="Have you ever intentionally and severely injured someone?" showReviewLater />
+                  <YesNoField name="q_religious_persecution" metaId="q_religious_persecution" label="Have you ever prevented someone from practicing their religion?" showReviewLater />
+                  <YesNoField name="q_harm_race_religion" metaId="q_harm_race_religion" label="Have you ever harmed someone because of their race, religion, or political opinion?" showReviewLater />
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Military and Police Service</h3>
-                  <YesNoField name="q_military_police_service" metaId="q_military_police_service" label="Have you ever served in a military or police unit?" />
-                  <YesNoField name="q_armed_group" metaId="q_armed_group" label="Have you ever been part of an armed group?" />
-                  <YesNoField name="q_detention_facility" metaId="q_detention_facility" label="Have you ever worked in a detention facility?" />
-                  <YesNoField name="q_group_used_weapons" metaId="q_group_used_weapons" label="10.a. Were you ever part of a group that used weapons?" />
+                  <YesNoField name="q_military_police_service" metaId="q_military_police_service" label="Have you ever served in a military or police unit?" showReviewLater />
+                  <YesNoField name="q_armed_group" metaId="q_armed_group" label="Have you ever been part of an armed group?" showReviewLater />
+                  <YesNoField name="q_detention_facility" metaId="q_detention_facility" label="Have you ever worked in a detention facility?" showReviewLater />
+                  <YesNoField name="q_group_used_weapons" metaId="q_group_used_weapons" label="10.a. Were you ever part of a group that used weapons?" showReviewLater />
                   {watchedData.q_group_used_weapons === "yes" && (
                     <>
-                      <YesNoField name="q_used_weapon_against_person" metaId="q_used_weapon_against_person" label="10.b. Did you use a weapon against another person?" tooltip="If you answered 'Yes' to Item Number 10.a., when you were part of this group, or when you helped this group, did you ever use a weapon against another person?" />
-                      <YesNoField name="q_threatened_weapon_use" metaId="q_threatened_weapon_use" label="10.c. Did you threaten to use a weapon against another person?" tooltip="If you answered 'Yes' to Item Number 10.a., when you were part of this group, or when you helped this group, did you ever threaten another person that you would use a weapon against that person?" />
+                      <YesNoField name="q_used_weapon_against_person" metaId="q_used_weapon_against_person" label="10.b. Did you use a weapon against another person?" tooltip="If you answered 'Yes' to Item Number 10.a., when you were part of this group, or when you helped this group, did you ever use a weapon against another person?" showReviewLater />
+                      <YesNoField name="q_threatened_weapon_use" metaId="q_threatened_weapon_use" label="10.c. Did you threaten to use a weapon against another person?" tooltip="If you answered 'Yes' to Item Number 10.a., when you were part of this group, or when you helped this group, did you ever threaten another person that you would use a weapon against that person?" showReviewLater />
                     </>
                   )}
-                  <YesNoField name="q_weapons_training" metaId="q_weapons_training" label="Have you ever received weapons or military training?" />
-                  <YesNoField name="q_sold_provided_weapons" metaId="q_sold_provided_weapons" label="Have you ever sold or provided weapons?" />
-                  <YesNoField name="q_recruited_under_15" metaId="q_recruited_under_15" label="Have you ever recruited someone under 15 for an armed group?" />
-                  <YesNoField name="q_used_under_15_hostilities" metaId="q_used_under_15_hostilities" label="Have you ever used someone under 15 in hostilities?" />
+                  <YesNoField name="q_weapons_training" metaId="q_weapons_training" label="Have you ever received weapons or military training?" showReviewLater />
+                  <YesNoField name="q_sold_provided_weapons" metaId="q_sold_provided_weapons" label="Have you ever sold or provided weapons?" showReviewLater />
+                  <YesNoField name="q_recruited_under_15" metaId="q_recruited_under_15" label="Have you ever recruited someone under 15 for an armed group?" showReviewLater />
+                  <YesNoField name="q_used_under_15_hostilities" metaId="q_used_under_15_hostilities" label="Have you ever used someone under 15 in hostilities?" showReviewLater />
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Crimes and Offenses</h3>
-                  <YesNoField name="q_committed_crime_not_arrested" metaId="q_committed_crime_not_arrested" label="15.a. Have you ever committed a crime for which you were not arrested?" />
-                  <YesNoField name="q_arrested" metaId="q_arrested" label="15.b. Have you ever been arrested, cited, or detained?" />
+                  <YesNoField name="q_committed_crime_not_arrested" metaId="q_committed_crime_not_arrested" label="15.a. Have you ever committed a crime for which you were not arrested?" showReviewLater />
+                  <YesNoField name="q_arrested" metaId="q_arrested" label="15.b. Have you ever been arrested, cited, or detained?" showReviewLater />
                   
                   {(watchedData.q_committed_crime_not_arrested === "yes" || watchedData.q_arrested === "yes") && (
                     <div className="form-group" style={{ marginTop: "16px" }}>
@@ -2942,37 +3092,37 @@ export default function N400Form() {
                   )}
                   
                   {(watchedData.q_committed_crime_not_arrested === "yes" || watchedData.q_arrested === "yes") && (
-                    <YesNoField name="q_completed_probation" metaId="q_completed_probation" label="16. If you received a suspended sentence, were placed on probation, or were paroled, have you completed your suspended sentence, probation, or parole?" />
+                    <YesNoField name="q_completed_probation" metaId="q_completed_probation" label="16. If you received a suspended sentence, were placed on probation, or were paroled, have you completed your suspended sentence, probation, or parole?" showReviewLater />
                   )}
-                  
+
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
-                  
-                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Moral Character</h3>
-                  <YesNoField name="q_prostitution" metaId="q_prostitution" label="Have you ever engaged in prostitution?" />
-                  <YesNoField name="q_controlled_substances" metaId="q_controlled_substances" label="Have you ever sold or trafficked controlled substances?" />
-                  <YesNoField name="q_marriage_fraud" metaId="q_marriage_fraud" label="Have you ever married someone to obtain an immigration benefit?" />
-                  <YesNoField name="q_polygamy" metaId="q_polygamy" label="Have you ever been married to more than one person at the same time?" />
-                  <YesNoField name="q_helped_illegal_entry" metaId="q_helped_illegal_entry" label="Have you ever helped someone enter the U.S. illegally?" />
-                  <YesNoField name="q_illegal_gambling" metaId="q_illegal_gambling" label="Have you ever gambled illegally or received income from illegal gambling?" />
-                  <YesNoField name="q_failed_child_support" metaId="q_failed_child_support" label="Have you ever failed to pay child support or alimony?" />
-                  <YesNoField name="q_misrepresentation_public_benefits" metaId="q_misrepresentation_public_benefits" label="Have you ever misrepresented information to obtain public benefits?" />
-                  <YesNoField name="q_habitual_drunkard" metaId="q_habitual_drunkard" label="Have you ever been a habitual drunkard?" />
+
+                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Additional Eligibility Questions</h3>
+                  <YesNoField name="q_prostitution" metaId="q_prostitution" label="Have you ever engaged in prostitution?" showReviewLater />
+                  <YesNoField name="q_controlled_substances" metaId="q_controlled_substances" label="Have you ever sold or trafficked controlled substances?" showReviewLater />
+                  <YesNoField name="q_marriage_fraud" metaId="q_marriage_fraud" label="Have you ever married someone to obtain an immigration benefit?" showReviewLater />
+                  <YesNoField name="q_polygamy" metaId="q_polygamy" label="Have you ever been married to more than one person at the same time?" showReviewLater />
+                  <YesNoField name="q_helped_illegal_entry" metaId="q_helped_illegal_entry" label="Have you ever helped someone enter the U.S. illegally?" showReviewLater />
+                  <YesNoField name="q_illegal_gambling" metaId="q_illegal_gambling" label="Have you ever gambled illegally or received income from illegal gambling?" showReviewLater />
+                  <YesNoField name="q_failed_child_support" metaId="q_failed_child_support" label="Have you ever failed to pay child support or alimony?" showReviewLater />
+                  <YesNoField name="q_misrepresentation_public_benefits" metaId="q_misrepresentation_public_benefits" label="Have you ever misrepresented information to obtain public benefits?" showReviewLater />
+                  <YesNoField name="q_habitual_drunkard" metaId="q_habitual_drunkard" label="Have you ever been a habitual drunkard?" showReviewLater />
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Immigration Violations</h3>
-                  <YesNoField name="q_false_info_us_government" metaId="q_false_info_us_government" label="Have you ever given false information to U.S. government officials?" />
-                  <YesNoField name="q_lied_us_government" metaId="q_lied_us_government" label="Have you ever lied to U.S. government officials?" />
-                  <YesNoField name="q_removed_deported" metaId="q_removed_deported" label="Have you ever been removed or deported from the U.S.?" />
-                  <YesNoField name="q_removal_proceedings" metaId="q_removal_proceedings" label="Have you ever been placed in removal or deportation proceedings?" />
+                  <YesNoField name="q_false_info_us_government" metaId="q_false_info_us_government" label="Have you ever given false information to U.S. government officials?" showReviewLater />
+                  <YesNoField name="q_lied_us_government" metaId="q_lied_us_government" label="Have you ever lied to U.S. government officials?" showReviewLater />
+                  <YesNoField name="q_removed_deported" metaId="q_removed_deported" label="Have you ever been removed or deported from the U.S.?" showReviewLater />
+                  <YesNoField name="q_removal_proceedings" metaId="q_removal_proceedings" label="Have you ever been placed in removal or deportation proceedings?" showReviewLater />
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Selective Service</h3>
-                  <YesNoField name="q_male_18_26_lived_us" metaId="q_male_18_26_lived_us" label="Are you a male who lived in the U.S. between ages 18-26?" />
+                  <YesNoField name="q_male_18_26_lived_us" metaId="q_male_18_26_lived_us" label="Are you a male who lived in the U.S. between ages 18-26?" showReviewLater />
                   {watchedData.q_male_18_26_lived_us === "yes" && (
                     <>
-                      <YesNoField name="q_registered_selective_service" metaId="q_registered_selective_service" label="Did you register for the Selective Service?" />
+                      <YesNoField name="q_registered_selective_service" metaId="q_registered_selective_service" label="Did you register for the Selective Service?" showReviewLater />
                       {watchedData.q_registered_selective_service === "yes" && (
                         <div className="form-row-equal" style={{ marginTop: "10px" }}>
                 <div className="form-group">
@@ -2991,36 +3141,36 @@ export default function N400Form() {
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Military Service</h3>
-                  <YesNoField name="q_left_us_avoid_draft" metaId="q_left_us_avoid_draft" label="23. Did you leave the U.S. to avoid being drafted?" />
-                  <YesNoField name="q_applied_military_exemption" metaId="q_applied_military_exemption" label="24. Have you ever applied for a military service exemption?" />
-                  <YesNoField name="q_served_us_military" metaId="q_served_us_military" label="25. Have you ever served in the U.S. armed forces?" />
+                  <YesNoField name="q_left_us_avoid_draft" metaId="q_left_us_avoid_draft" label="23. Did you leave the U.S. to avoid being drafted?" showReviewLater />
+                  <YesNoField name="q_applied_military_exemption" metaId="q_applied_military_exemption" label="24. Have you ever applied for a military service exemption?" showReviewLater />
+                  <YesNoField name="q_served_us_military" metaId="q_served_us_military" label="25. Have you ever served in the U.S. armed forces?" showReviewLater />
                   
                   {/* Items 26-29 only show if Item 25 is "yes" */}
                   {watchedData.q_served_us_military === "yes" && (
                     <>
-                      <YesNoField name="q_current_military_member" metaId="q_current_military_member" label="26.a. Are you currently a member of the U.S. armed forces?" />
+                      <YesNoField name="q_current_military_member" metaId="q_current_military_member" label="26.a. Are you currently a member of the U.S. armed forces?" showReviewLater />
                       {watchedData.q_current_military_member === "yes" && (
                         <>
-                          <YesNoField name="q_scheduled_deploy" metaId="q_scheduled_deploy" label="26.b. Are you scheduled to deploy outside the U.S. within 3 months?" tooltip="Are you scheduled to deploy outside the United States, including to a vessel, within the next 3 months? (Call the Military Help Line at 877-247-4645 if you transfer to a new duty station after you file your Form N-400, including if you are deployed outside the United States or to a vessel.)" />
-                          <YesNoField name="q_stationed_outside_us" metaId="q_stationed_outside_us" label="26.c. Are you currently stationed outside the U.S.?" />
+                          <YesNoField name="q_scheduled_deploy" metaId="q_scheduled_deploy" label="26.b. Are you scheduled to deploy outside the U.S. within 3 months?" tooltip="Are you scheduled to deploy outside the United States, including to a vessel, within the next 3 months? (Call the Military Help Line at 877-247-4645 if you transfer to a new duty station after you file your Form N-400, including if you are deployed outside the United States or to a vessel.)" showReviewLater />
+                          <YesNoField name="q_stationed_outside_us" metaId="q_stationed_outside_us" label="26.c. Are you currently stationed outside the U.S.?" showReviewLater />
                         </>
                       )}
                       {watchedData.q_current_military_member === "no" && (
-                        <YesNoField name="q_former_military_outside_us" metaId="q_former_military_outside_us" label="26.d. Are you a former military member living outside the U.S.?" />
+                        <YesNoField name="q_former_military_outside_us" metaId="q_former_military_outside_us" label="26.d. Are you a former military member living outside the U.S.?" showReviewLater />
                       )}
-                      <YesNoField name="q_discharged_because_alien" metaId="q_discharged_because_alien" label="27. Were you discharged because you were an alien?" />
-                      <YesNoField name="q_court_martialed" metaId="q_court_martialed" label="28. Were you court-martialed or received a dishonorable discharge?" />
-                      <YesNoField name="q_deserted_military" metaId="q_deserted_military" label="29. Have you ever deserted from the U.S. armed forces?" />
+                      <YesNoField name="q_discharged_because_alien" metaId="q_discharged_because_alien" label="27. Were you discharged because you were an alien?" showReviewLater />
+                      <YesNoField name="q_court_martialed" metaId="q_court_martialed" label="28. Were you court-martialed or received a dishonorable discharge?" showReviewLater />
+                      <YesNoField name="q_deserted_military" metaId="q_deserted_military" label="29. Have you ever deserted from the U.S. armed forces?" showReviewLater />
                     </>
                   )}
                   
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Title of Nobility</h3>
-                  <YesNoField name="q_title_of_nobility" metaId="q_title_of_nobility" label="30.a. Do you have or have you ever had a hereditary title or order of nobility?" />
+                  <YesNoField name="q_title_of_nobility" metaId="q_title_of_nobility" label="30.a. Do you have or have you ever had a hereditary title or order of nobility?" showReviewLater />
                   {watchedData.q_title_of_nobility === "yes" && (
                     <>
-                      <YesNoField name="q_willing_to_give_up_titles" metaId="q_willing_to_give_up_titles" label="30.b. Are you willing to give up your titles at your naturalization ceremony?" tooltip="If you answered 'Yes' to Item Number 30.a., are you willing to give up any inherited titles or orders of nobility, that you have in a foreign country at your naturalization ceremony?" />
+                      <YesNoField name="q_willing_to_give_up_titles" metaId="q_willing_to_give_up_titles" label="30.b. Are you willing to give up your titles at your naturalization ceremony?" tooltip="If you answered 'Yes' to Item Number 30.a., are you willing to give up any inherited titles or orders of nobility, that you have in a foreign country at your naturalization ceremony?" showReviewLater />
                       {/* USCIS requires listing titles regardless of willingness to give them up */}
                       <div className="form-group" style={{ marginTop: "10px" }}>
                         <label className="form-label">List all titles and orders of nobility:</label>
@@ -3035,15 +3185,15 @@ export default function N400Form() {
                   <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
                   
                   <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Oath of Allegiance</h3>
-                  <YesNoField name="q_support_constitution" metaId="q_support_constitution" label="31. Do you support the U.S. Constitution and form of government?" />
-                  <YesNoField name="q_understand_oath" metaId="q_understand_oath" label="32. Do you understand the full Oath of Allegiance?" />
-                  <YesNoField name="q_unable_oath_disability" metaId="q_unable_oath_disability" label="33. Are you unable to take the Oath due to a disability?" />
+                  <YesNoField name="q_support_constitution" metaId="q_support_constitution" label="31. Do you support the U.S. Constitution and form of government?" showReviewLater />
+                  <YesNoField name="q_understand_oath" metaId="q_understand_oath" label="32. Do you understand the full Oath of Allegiance?" showReviewLater />
+                  <YesNoField name="q_unable_oath_disability" metaId="q_unable_oath_disability" label="33. Are you unable to take the Oath due to a disability?" showReviewLater />
                   {watchedData.q_unable_oath_disability === "no" && (
                     <>
-                      <YesNoField name="q_willing_take_oath" metaId="q_willing_take_oath" label="34. Are you willing to take the full Oath of Allegiance?" />
-                      <YesNoField name="q_willing_bear_arms" metaId="q_willing_bear_arms" label="35. Are you willing to bear arms if required by law?" />
-                      <YesNoField name="q_willing_noncombatant" metaId="q_willing_noncombatant" label="36. Are you willing to perform noncombatant services if required?" />
-                      <YesNoField name="q_willing_work_national_importance" metaId="q_willing_work_national_importance" label="37. Are you willing to perform work of national importance if required?" />
+                      <YesNoField name="q_willing_take_oath" metaId="q_willing_take_oath" label="34. Are you willing to take the full Oath of Allegiance?" showReviewLater />
+                      <YesNoField name="q_willing_bear_arms" metaId="q_willing_bear_arms" label="35. Are you willing to bear arms if required by law?" showReviewLater />
+                      <YesNoField name="q_willing_noncombatant" metaId="q_willing_noncombatant" label="36. Are you willing to perform noncombatant services if required?" showReviewLater />
+                      <YesNoField name="q_willing_work_national_importance" metaId="q_willing_work_national_importance" label="37. Are you willing to perform work of national importance if required?" showReviewLater />
                       <p className="helper-text" style={{ marginTop: "-10px", fontSize: "13px" }}>
                         If you answer "No" to any question except Item Number 33., see the Oath of Allegiance section of the Instructions for more information.
                       </p>
@@ -3395,6 +3545,73 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 16 && (
               <>
+                {/* Flagged for Review Section */}
+                {Object.entries(reviewLater).filter(([, flagged]) => flagged).length > 0 && (
+                  <div style={{ marginBottom: "24px", padding: "16px", background: "#FEF3C7", borderRadius: "8px", border: "1px solid #F59E0B" }}>
+                    <h3 style={{ fontSize: "16px", fontWeight: "600", color: "#92400E", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "18px" }}>⚠️</span> Flagged for Review
+                    </h3>
+                    <p style={{ fontSize: "14px", color: "#92400E", marginBottom: "12px" }}>
+                      You marked the following questions for later review. Consider revisiting them before submitting.
+                    </p>
+                    <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                      {Object.entries(reviewLater)
+                        .filter(([, flagged]) => flagged)
+                        .map(([questionId]) => {
+                          const meta = getQuestionMeta(questionId);
+                          return (
+                            <li key={questionId} style={{ fontSize: "14px", color: "#78350F", marginBottom: "4px" }}>
+                              {meta?.title || questionId}
+                            </li>
+                          );
+                        })}
+                    </ul>
+                    <button
+                      type="button"
+                      onClick={() => goToStep(10)}
+                      style={{ marginTop: "12px", padding: "8px 16px", background: "#F59E0B", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontWeight: "500" }}
+                    >
+                      Review Background Questions
+                    </button>
+                  </div>
+                )}
+
+                {/* Missing Explanations Section */}
+                {(() => {
+                  const missingExplanations = (PART_9_METADATA.questions || [])
+                    .filter((question) => {
+                      const value = watchedData[question.id as keyof typeof watchedData];
+                      return question.explanation_required && value === "yes";
+                    });
+
+                  if (missingExplanations.length === 0) return null;
+
+                  return (
+                    <div style={{ marginBottom: "24px", padding: "16px", background: "#FEE2E2", borderRadius: "8px", border: "1px solid #EF4444" }}>
+                      <h3 style={{ fontSize: "16px", fontWeight: "600", color: "#991B1B", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "18px" }}>📝</span> Explanations Needed
+                      </h3>
+                      <p style={{ fontSize: "14px", color: "#991B1B", marginBottom: "12px" }}>
+                        You answered "Yes" to the following questions that may require additional explanation in Part 14.
+                      </p>
+                      <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                        {missingExplanations.map((question) => (
+                          <li key={question.id} style={{ fontSize: "14px", color: "#7F1D1D", marginBottom: "4px" }}>
+                            {question.title || question.id}
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        type="button"
+                        onClick={() => goToStep(15)}
+                        style={{ marginTop: "12px", padding: "8px 16px", background: "#EF4444", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontWeight: "500" }}
+                      >
+                        Add Explanations (Part 14)
+                      </button>
+                    </div>
+                  );
+                })()}
+
                 <ReviewSection title="ELIGIBILITY" onEdit={() => goToStep(1)}>
                   <ReviewField label="Basis" value={ELIGIBILITY_OPTIONS.find(o => o.value === watchedData.eligibility_basis)?.label || "—"} />
                 </ReviewSection>
@@ -3413,8 +3630,8 @@ export default function N400Form() {
                 </ReviewSection>
 
                 <ReviewSection title="CONTACT" onEdit={() => goToStep(4)}>
-                  <ReviewField label="Phone" value={watchedData.daytime_phone} />
-                  <ReviewField label="Email" value={watchedData.email} />
+                  <ReviewField label="Phone" value={watchedData.daytime_phone || "—"} />
+                  <ReviewField label="Email" value={watchedData.email || "—"} />
                 </ReviewSection>
 
                 <ReviewSection title="RESIDENCE" onEdit={() => goToStep(5)}>
@@ -3457,7 +3674,7 @@ export default function N400Form() {
                 <button
                   type="button"
                   className="btn-next"
-                  onClick={handleDownloadPDF}
+                  onClick={() => handleDownloadPDF()}
                   disabled={isDownloading || isRedirectingToPayment}
                   data-download-btn
                 >
@@ -3492,7 +3709,7 @@ export default function N400Form() {
                   <button type="button" className="btn-back" onClick={handleBack}>← Back</button>
                 )}
                 <button type="button" className="btn-next" onClick={handleNext}>
-                  NEXT <span style={{ marginLeft: "4px" }}>→</span>
+                  Save & continue
                 </button>
               </div>
             )}
