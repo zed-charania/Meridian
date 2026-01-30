@@ -14,7 +14,6 @@ import { useRouter } from "next/navigation";
 
 // Meridian Guidance Pattern Components & Metadata
 import { GuidanceHeader } from "@/components/ui/guidance-header";
-import { EverCallout } from "@/components/ui/ever-callout";
 import {
   PART_1_METADATA,
   PART_2_METADATA,
@@ -859,6 +858,8 @@ export default function N400Form() {
   const [reviewLater, setReviewLater] = useState<Record<string, boolean>>({});
   // Track which explanation_required questions need prompts shown
   const [showExplanationPrompt, setShowExplanationPrompt] = useState<Record<string, boolean>>({});
+  // Part 9 internal question pagination
+  const [part9QuestionIndex, setPart9QuestionIndex] = useState(0);
   const supabase = getSupabaseBrowserClient();
 
   const {
@@ -878,7 +879,38 @@ export default function N400Form() {
   });
 
   const watchedData = watch();
-  const progress = (currentStep / STEPS.length) * 100;
+
+  // Build list of visible Part 9 questions (respecting show_when conditions)
+  const getVisiblePart9Questions = () => {
+    const allQuestions = PART_9_METADATA.questions || [];
+    return allQuestions.filter(question => {
+      if (!question.show_when) return true;
+      const { field, value } = question.show_when;
+      const currentValue = watchedData[field as keyof FormData];
+      if (Array.isArray(value)) {
+        return value.includes(currentValue as string);
+      }
+      return currentValue === value;
+    });
+  };
+
+  const visiblePart9Questions = getVisiblePart9Questions();
+  const totalPart9Questions = visiblePart9Questions.length;
+  const currentPart9Question = visiblePart9Questions[part9QuestionIndex];
+
+  // Calculate progress with Part 9 sub-pagination
+  const calculateProgress = () => {
+    const baseSteps = STEPS.length;
+    if (currentStep === 10 && totalPart9Questions > 0) {
+      const part9Progress = (part9QuestionIndex + 1) / totalPart9Questions;
+      const step9Base = (9 / baseSteps) * 100;
+      const step11Base = (11 / baseSteps) * 100;
+      return step9Base + (step11Base - step9Base) * part9Progress;
+    }
+    return (currentStep / baseSteps) * 100;
+  };
+
+  const progress = calculateProgress();
 
   const handleAutofillSample = () => {
     setAuthError(null)
@@ -1150,6 +1182,29 @@ export default function N400Form() {
   };
 
   const handleNext = async () => {
+    // Special handling for Part 9 (Step 10) internal pagination
+    if (currentStep === 10 && totalPart9Questions > 0) {
+      // Validate current question
+      const currentQuestion = visiblePart9Questions[part9QuestionIndex];
+      if (currentQuestion) {
+        const fieldName = currentQuestion.id as keyof FormData;
+        const isValid = await trigger([fieldName]);
+        if (!isValid) return;
+      }
+
+      // Move to next question or exit Part 9
+      if (part9QuestionIndex < totalPart9Questions - 1) {
+        setPart9QuestionIndex(prev => prev + 1);
+        return;
+      } else {
+        // Finished Part 9, move to next step
+        setPart9QuestionIndex(0);
+        setCurrentStep(prev => Math.min(prev + 1, STEPS.length));
+        return;
+      }
+    }
+
+    // Default behavior for other steps
     const fields = getStepFields(currentStep);
     const isValid = fields.length === 0 || await trigger(fields);
     if (isValid) {
@@ -1158,6 +1213,13 @@ export default function N400Form() {
   };
 
   const handleBack = () => {
+    // Special handling for Part 9 (Step 10) internal pagination
+    if (currentStep === 10 && part9QuestionIndex > 0) {
+      setPart9QuestionIndex(prev => prev - 1);
+      return;
+    }
+
+    // Going back from start of Part 9 or other steps
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
@@ -1319,6 +1381,7 @@ export default function N400Form() {
         q_owe_taxes: data.q_owe_taxes,
         q_title_of_nobility: data.q_title_of_nobility,
       q_willing_to_give_up_titles: data.q_willing_to_give_up_titles,
+      q_titles_list: data.q_titles_list,
 
         // Affiliations
         q_communist_party: data.q_communist_party,
@@ -1860,6 +1923,232 @@ export default function N400Form() {
     </div>
   );
 
+  // Single Question Screen Component for Part 9
+  const SingleQuestionScreen = () => {
+    if (!currentPart9Question) return null;
+
+    const question = currentPart9Question;
+    const fieldName = question.id as keyof FormData;
+    const currentValue = watchedData[fieldName];
+    const isFlagged = reviewLater[question.id];
+    const needsExplanation = question.explanation_required && currentValue === "yes";
+    const showPrompt = needsExplanation && showExplanationPrompt[question.id];
+
+    // Determine if this question has compound fields that need to be shown
+    const showCrimeTable = (question.id === "q_arrested" || question.id === "q_committed_crime_not_arrested")
+      && currentValue === "yes";
+    const showSelectiveServiceFields = question.id === "q_registered_selective_service" && currentValue === "yes";
+    const showTitlesList = question.id === "q_title_of_nobility" && currentValue === "yes";
+
+    return (
+      <div className="single-question-screen">
+        {/* Back button */}
+        {part9QuestionIndex > 0 && (
+          <button type="button" className="sq-back-btn" onClick={handleBack}>
+            ← Back
+          </button>
+        )}
+
+        {/* Part label */}
+        <div className="sq-part-label">PART 9 • BACKGROUND</div>
+
+        {/* Question counter */}
+        <div className="sq-counter">
+          Question {part9QuestionIndex + 1} of {totalPart9Questions}
+        </div>
+
+        {/* Large headline question */}
+        <h2 className="sq-headline">{question.title}</h2>
+
+        {/* Helper text (intent) */}
+        {question.intent && (
+          <p className="sq-helper">{question.intent}</p>
+        )}
+
+        {/* Yes/No buttons */}
+        <div className="sq-radio-group">
+          <div className="sq-radio-option">
+            <input
+              type="radio"
+              id={`${fieldName}-yes`}
+              value="yes"
+              {...register(fieldName, {
+                onChange: () => {
+                  if (question.explanation_required) {
+                    setShowExplanationPrompt((prev) => ({ ...prev, [question.id]: true }));
+                  }
+                }
+              })}
+            />
+            <label htmlFor={`${fieldName}-yes`} className="sq-radio-label">Yes</label>
+          </div>
+          <div className="sq-radio-option">
+            <input
+              type="radio"
+              id={`${fieldName}-no`}
+              value="no"
+              {...register(fieldName, {
+                onChange: () => {
+                  setShowExplanationPrompt((prev) => ({ ...prev, [question.id]: false }));
+                }
+              })}
+            />
+            <label htmlFor={`${fieldName}-no`} className="sq-radio-label">No</label>
+          </div>
+        </div>
+
+        {/* Compound Fields: Crime Table */}
+        {showCrimeTable && (
+          <div className="sq-compound-section">
+            <p className="sq-compound-label">
+              Please provide details about each crime or offense, even if your records have been sealed, expunged, or otherwise cleared.
+            </p>
+            {crimeFields.length === 0 && (
+              <button
+                type="button"
+                onClick={() => appendCrime({ date_of_crime: "", date_of_conviction: "", crime_description: "", place_of_crime: "", result_disposition: "", sentence: "" })}
+                className="sq-add-btn"
+              >
+                + Add Crime or Offense
+              </button>
+            )}
+            {crimeFields.length > 0 && (
+              <div className="sq-crime-entries">
+                {crimeFields.map((field, index) => (
+                  <div key={field.id} className="sq-crime-entry">
+                    <div className="sq-crime-entry-header">
+                      <span>Crime #{index + 1}</span>
+                      <button type="button" onClick={() => removeCrime(index)} className="sq-remove-btn">
+                        <Trash2 size={14} /> Remove
+                      </button>
+                    </div>
+                    <div className="sq-crime-fields">
+                      <div className="sq-field-row">
+                        <div className="sq-field">
+                          <label>Date of Crime</label>
+                          <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`crimes.${index}.date_of_crime`)} />
+                        </div>
+                        <div className="sq-field">
+                          <label>Date of Conviction</label>
+                          <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`crimes.${index}.date_of_conviction`)} />
+                        </div>
+                      </div>
+                      <div className="sq-field">
+                        <label>Crime Description</label>
+                        <input type="text" className="form-input" placeholder="Describe the crime or offense" {...register(`crimes.${index}.crime_description`)} />
+                      </div>
+                      <div className="sq-field">
+                        <label>Place of Crime</label>
+                        <input type="text" className="form-input" placeholder="City, State, Country" {...register(`crimes.${index}.place_of_crime`)} />
+                      </div>
+                      <div className="sq-field-row">
+                        <div className="sq-field">
+                          <label>Result/Disposition</label>
+                          <input type="text" className="form-input" placeholder="e.g., Dismissed, Convicted" {...register(`crimes.${index}.result_disposition`)} />
+                        </div>
+                        <div className="sq-field">
+                          <label>Sentence</label>
+                          <input type="text" className="form-input" placeholder="e.g., 6 months probation" {...register(`crimes.${index}.sentence`)} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => appendCrime({ date_of_crime: "", date_of_conviction: "", crime_description: "", place_of_crime: "", result_disposition: "", sentence: "" })}
+                  className="sq-add-btn"
+                >
+                  + Add Another Crime or Offense
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Compound Fields: Selective Service */}
+        {showSelectiveServiceFields && (
+          <div className="sq-compound-section">
+            <p className="sq-compound-label">Please provide your Selective Service registration details:</p>
+            <div className="sq-field-row">
+              <div className="sq-field">
+                <label>Selective Service Number</label>
+                <input type="text" className="form-input" placeholder="Enter your number" {...register("selective_service_number")} />
+              </div>
+              <div className="sq-field">
+                <label>Date Registered</label>
+                <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("selective_service_date")} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Compound Fields: Titles List */}
+        {showTitlesList && (
+          <div className="sq-compound-section">
+            <p className="sq-compound-label">Please list all titles and orders of nobility you currently have or have ever had:</p>
+            <div className="sq-field">
+              <textarea
+                className="form-input"
+                rows={3}
+                placeholder="List each title on a separate line"
+                {...register("q_titles_list")}
+              />
+              <p className="sq-field-hint">You must disclose all titles regardless of whether you are willing to give them up.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Explanation notice when "Yes" on explanation_required */}
+        {showPrompt && !showCrimeTable && !showSelectiveServiceFields && !showTitlesList && (
+          <div className="sq-explanation-notice">
+            <p>This response may require an explanation in Part 14 (Additional Information).</p>
+            <div className="sq-explanation-notice-buttons">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => handleAddExplanationNow(question.id)}
+              >
+                Add explanation now
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => handleAddExplanationLater(question.id)}
+              >
+                Add later
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Save & continue button */}
+        <button
+          type="button"
+          className="sq-continue-btn"
+          onClick={handleNext}
+          disabled={!currentValue}
+        >
+          Save & continue →
+        </button>
+
+        {/* Review later link */}
+        <button
+          type="button"
+          className={`sq-review-later-link ${isFlagged ? 'is-flagged' : ''}`}
+          onClick={() => toggleReviewLater(question.id)}
+        >
+          {isFlagged ? '⚑ Flagged for review' : 'Review this later'}
+        </button>
+
+        {/* Draft footer */}
+        <div className="sq-draft-footer">
+          Draft — nothing is submitted until you generate and review your PDF.
+        </div>
+      </div>
+    );
+  };
+
   const stepGuidance = STEP_GUIDANCE[currentStep];
 
   return (
@@ -2122,175 +2411,182 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 2 && (
               <>
-                {/* Item 1: Current Legal Name */}
-                <div className="form-group">
-                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
-                    1. Your Current Legal Name
-                    <InfoIcon tooltip="Do not provide a nickname" />
-                  </label>
-                  <div className="form-row-thirds">
-                    <div>
-                      <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("last_name", "Family Name (Last Name)")}</label>
-                      <input type="text" className="form-input" placeholder="Last Name" {...register("last_name")} />
-                      {errors.last_name && <p className="error-message">{errors.last_name.message}</p>}
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("first_name", "Given Name (First Name)")}</label>
-                      <input type="text" className="form-input" placeholder="First Name" {...register("first_name")} />
-                      {errors.first_name && <p className="error-message">{errors.first_name.message}</p>}
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("middle_name", "Middle Name (if applicable)")}</label>
-                      <input type="text" className="form-input" placeholder="Middle Name" {...register("middle_name")} />
+                {/* CARD 1: Your Name */}
+                <div className="question-card">
+                  <div className="question-card-title">Your Name</div>
+
+                  {/* Item 1: Current Legal Name */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                      Your Current Legal Name
+                      <InfoIcon tooltip="Do not provide a nickname" />
+                    </label>
+                    <div className="form-row-thirds">
+                      <div>
+                        <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>Family name (last name)</label>
+                        <input type="text" className="form-input" placeholder="Last Name" {...register("last_name")} />
+                        {errors.last_name && <p className="error-message">{errors.last_name.message}</p>}
+                      </div>
+                      <div>
+                        <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>Given name (first name)</label>
+                        <input type="text" className="form-input" placeholder="First Name" {...register("first_name")} />
+                        {errors.first_name && <p className="error-message">{errors.first_name.message}</p>}
+                      </div>
+                      <div>
+                        <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>Middle name (if any)</label>
+                        <input type="text" className="form-input" placeholder="Middle Name" {...register("middle_name")} />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Item 2: Other Names Used */}
-                <YesNoField 
-                  name="has_used_other_names" 
-                  metaId="has_used_other_names"
-                  label="2. Have you used other names since birth?" 
-                  tooltip="Include all names you have used, including maiden names, previous married names, aliases, or any other names used in official documents. See the Instructions for this Item Number for more information about which names to include."
-                />
-                
-                {watchedData.has_used_other_names === "yes" && (
-                  <div className="form-group" style={{ marginTop: "10px" }}>
-                    <p className="helper-text" style={{ marginBottom: "12px" }}>Provide all other names you have used:</p>
-                    
-                    {otherNamesFields.length === 0 && (
-                      <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginBottom: "16px" }}>
+                  {/* Item 2: Other Names Used */}
+                  <YesNoField
+                    name="has_used_other_names"
+                    metaId="has_used_other_names"
+                    label="Have you used other names since birth?"
+                    tooltip="Include all names you have used, including maiden names, previous married names, aliases, or any other names used in official documents."
+                  />
+
+                  {watchedData.has_used_other_names === "yes" && (
+                    <div style={{ marginTop: "16px", padding: "20px", background: "var(--bg)", borderRadius: "12px" }}>
+                      <p className="helper-text" style={{ marginBottom: "16px", marginTop: 0 }}>Provide all other names you have used:</p>
+
+                      {otherNamesFields.length === 0 && (
                         <button
                           type="button"
                           onClick={() => appendOtherName({ family_name: "", given_name: "", middle_name: "" })}
                           className="save-btn"
-                          style={{ padding: "8px 16px", fontSize: "14px" }}
+                          style={{ padding: "10px 18px", fontSize: "14px" }}
                         >
                           + Add Other Name
                         </button>
-                      </div>
-                    )}
+                      )}
 
-                    {otherNamesFields.map((field, index) => (
-                      <div key={field.id} style={{ marginBottom: "16px", padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                          <h4 style={{ fontSize: "16px", fontWeight: "600" }}>Other Name {index + 1}</h4>
-                          <button
-                            type="button"
-                            onClick={() => removeOtherName(index)}
-                            style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                      {otherNamesFields.map((field, index) => (
+                        <div key={field.id} style={{ marginBottom: "16px", padding: "16px", background: "white", borderRadius: "10px", border: "1px solid var(--light-gray)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                            <span style={{ fontSize: "14px", fontWeight: "500" }}>Name {index + 1}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeOtherName(index)}
+                              style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                          <div className="form-row-thirds">
+                            <div>
+                              <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>Last Name</label>
+                              <input type="text" className="form-input" placeholder="Last Name" {...register(`other_names.${index}.family_name`)} />
+                            </div>
+                            <div>
+                              <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>First Name</label>
+                              <input type="text" className="form-input" placeholder="First Name" {...register(`other_names.${index}.given_name`)} />
+                            </div>
+                            <div>
+                              <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>Middle Name</label>
+                              <input type="text" className="form-input" placeholder="Middle Name" {...register(`other_names.${index}.middle_name`)} />
+                            </div>
+                          </div>
                         </div>
-                        <div className="form-row-thirds">
-                    <div>
-                            <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Family Name (Last Name)</label>
-                            <input type="text" className="form-input" placeholder="Last Name" {...register(`other_names.${index}.family_name`)} />
+                      ))}
+
+                      {otherNamesFields.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => appendOtherName({ family_name: "", given_name: "", middle_name: "" })}
+                          className="save-btn"
+                          style={{ padding: "10px 18px", fontSize: "14px", marginTop: "8px" }}
+                        >
+                          + Add Another Name
+                        </button>
+                      )}
                     </div>
-                          <div>
-                            <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Given Name (First Name)</label>
-                            <input type="text" className="form-input" placeholder="First Name" {...register(`other_names.${index}.given_name`)} />
-                  </div>
-                          <div>
-                            <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Middle Name (if applicable)</label>
-                            <input type="text" className="form-input" placeholder="Middle Name" {...register(`other_names.${index}.middle_name`)} />
-                </div>
+                  )}
+
+                  {/* Item 3: Name Change */}
+                  <YesNoField name="wants_name_change" metaId="wants_name_change" label="Would you like to legally change your name?" />
+
+                  {watchedData.wants_name_change === "yes" && (
+                    <div style={{ marginTop: "16px", padding: "20px", background: "var(--bg)", borderRadius: "12px" }}>
+                      <label className="form-label" style={{ marginBottom: "12px" }}>Enter your new name:</label>
+                      <div className="form-row-thirds">
+                        <div>
+                          <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>New Last Name</label>
+                          <input type="text" className="form-input" placeholder="New Last Name" {...register("new_name_last")} />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>New First Name</label>
+                          <input type="text" className="form-input" placeholder="New First Name" {...register("new_name_first")} />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>New Middle Name</label>
+                          <input type="text" className="form-input" placeholder="New Middle Name" {...register("new_name_middle")} />
                         </div>
                       </div>
-                    ))}
-
-                    {otherNamesFields.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => appendOtherName({ family_name: "", given_name: "", middle_name: "" })}
-                        className="save-btn"
-                        style={{ padding: "8px 16px", fontSize: "14px", marginTop: "8px" }}
-                      >
-                        + Add Another Name
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* Item 3: Name Change */}
-                <YesNoField name="wants_name_change" metaId="wants_name_change" label="3. Would you like to legally change your name?" />
-                
-                {watchedData.wants_name_change === "yes" && (
-                  <div className="form-group" style={{ marginTop: "20px" }}>
-                    <label className="form-label">Type or print the new name you would like to use:</label>
-                    <div className="form-row-thirds">
-                      <div>
-                        <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Family Name (Last Name)</label>
-                        <input type="text" className="form-input" placeholder="New Last Name" {...register("new_name_last")} />
-                        {errors.new_name_last && <p className="error-message">{errors.new_name_last.message}</p>}
-                      </div>
-                      <div>
-                        <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Given Name (First Name)</label>
-                        <input type="text" className="form-input" placeholder="New First Name" {...register("new_name_first")} />
-                        {errors.new_name_first && <p className="error-message">{errors.new_name_first.message}</p>}
-                      </div>
-                      <div>
-                        <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Middle Name (if applicable)</label>
-                        <input type="text" className="form-input" placeholder="New Middle Name" {...register("new_name_middle")} />
-                      </div>
                     </div>
-                    <p className="helper-text" style={{ marginTop: "8px", fontSize: "14px" }}>
-                      Read the Instructions for this Item Number before you decide whether you would like to legally change your name.
-                    </p>
-                  </div>
-                )}
-
-                {/* Item 4: USCIS Online Account Number */}
-                <div className="form-group">
-                  <label className="form-label">4. {labelFor("uscis_account_number", "USCIS Online Account Number")}</label>
-                  {renderQuestionGuidance("uscis_account_number")}
-                  <input type="text" className="form-input" placeholder="12-digit number" style={{ maxWidth: "250px" }} {...register("uscis_account_number")} />
+                  )}
                 </div>
 
-                {/* Item 5: Sex */}
-                <div className="form-group">
-                  <label className="form-label">5. {labelFor("gender", "Sex")}</label>
-                  {renderQuestionGuidance("gender")}
-                  <div className="radio-group">
-                    <div className="radio-option">
-                      <input type="radio" id="gender-male" value="male" {...register("gender")} />
-                      <label htmlFor="gender-male" className="radio-label">Male</label>
-                    </div>
-                    <div className="radio-option">
-                      <input type="radio" id="gender-female" value="female" {...register("gender")} />
-                      <label htmlFor="gender-female" className="radio-label">Female</label>
-                    </div>
-                  </div>
-                  {errors.gender && <p className="error-message">{errors.gender.message}</p>}
-                </div>
+                {/* CARD 2: Personal Details */}
+                <div className="question-card">
+                  <div className="question-card-title">Personal Details</div>
 
-                {/* Item 6: Date of Birth */}
-                <div className="form-group">
-                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
-                    6. {labelFor("date_of_birth", "Date of Birth")}
-                    <InfoIcon tooltip="In addition to your actual date of birth, include any other dates of birth you have ever used, including dates used in connection with any legal names or non-legal names, in the space provided in Part 14. Additional Information." />
-                  </label>
-                  {renderQuestionGuidance("date_of_birth")}
-                  <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("date_of_birth")} />
-                  {errors.date_of_birth && <p className="error-message">{errors.date_of_birth.message}</p>}
-                </div>
-
-                {/* Item 7: Date Became Permanent Resident */}
+                  {/* Item 4: USCIS Online Account Number */}
                   <div className="form-group">
-                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
-                    7. {labelFor("date_became_permanent_resident", "Date You Became a Lawful Permanent Resident")}
-                    <InfoIcon tooltip="If you are a lawful permanent resident, provide the date you became a lawful permanent resident (mm/dd/yyyy). Found on your green card as 'Resident Since'" />
-                  </label>
-                  {renderQuestionGuidance("date_became_permanent_resident")}
-                  <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("date_became_permanent_resident")} />
-                  {errors.date_became_permanent_resident && <p className="error-message">{errors.date_became_permanent_resident.message}</p>}
+                    <label className="form-label">{labelFor("uscis_account_number", "USCIS Online Account Number")}</label>
+                    {renderQuestionGuidance("uscis_account_number")}
+                    <input type="text" className="form-input" placeholder="12-digit number" style={{ maxWidth: "220px" }} {...register("uscis_account_number")} />
+                  </div>
+
+                  {/* Item 5: Sex */}
+                  <div className="form-group">
+                    <label className="form-label">{labelFor("gender", "Sex")}</label>
+                    {renderQuestionGuidance("gender")}
+                    <div className="radio-group">
+                      <div className="radio-option">
+                        <input type="radio" id="gender-male" value="male" {...register("gender")} />
+                        <label htmlFor="gender-male" className="radio-label">Male</label>
+                      </div>
+                      <div className="radio-option">
+                        <input type="radio" id="gender-female" value="female" {...register("gender")} />
+                        <label htmlFor="gender-female" className="radio-label">Female</label>
+                      </div>
+                    </div>
+                    {errors.gender && <p className="error-message">{errors.gender.message}</p>}
+                  </div>
+
+                  {/* Item 6: Date of Birth */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                      {labelFor("date_of_birth", "Date of Birth")}
+                      <InfoIcon tooltip="Use the format MM/DD/YYYY" />
+                    </label>
+                    {renderQuestionGuidance("date_of_birth")}
+                    <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "180px" }} {...register("date_of_birth")} />
+                    {errors.date_of_birth && <p className="error-message">{errors.date_of_birth.message}</p>}
+                  </div>
+
+                  {/* Item 7: Date Became Permanent Resident */}
+                  <div className="form-group">
+                    <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                      {labelFor("date_became_permanent_resident", "Permanent Resident Since")}
+                      <InfoIcon tooltip="Found on your green card as 'Resident Since'" />
+                    </label>
+                    {renderQuestionGuidance("date_became_permanent_resident")}
+                    <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "180px" }} {...register("date_became_permanent_resident")} />
+                    {errors.date_became_permanent_resident && <p className="error-message">{errors.date_became_permanent_resident.message}</p>}
+                  </div>
                 </div>
 
-                {/* Item 8: Country of Birth */}
-                <div className="form-group">
-                  <label className="form-label">8. {labelFor("country_of_birth", "Country of Birth")}</label>
-                  {renderQuestionGuidance("country_of_birth")}
+                {/* CARD 3: Origin */}
+                <div className="question-card">
+                  <div className="question-card-title">Country of Origin</div>
+
+                  {/* Item 8: Country of Birth */}
+                  <div className="form-group">
+                    <label className="form-label">{labelFor("country_of_birth", "Country of Birth")}</label>
+                    {renderQuestionGuidance("country_of_birth")}
                     <select className="form-select" {...register("country_of_birth")}>
                       <option value="">Select...</option>
                       {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -2298,64 +2594,63 @@ export default function N400Form() {
                     {errors.country_of_birth && <p className="error-message">{errors.country_of_birth.message}</p>}
                   </div>
 
-                {/* Item 9: Country of Citizenship */}
+                  {/* Item 9: Country of Citizenship */}
                   <div className="form-group">
-                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
-                    9. {labelFor("country_of_citizenship", "Country of Citizenship or Nationality")}
-                    <InfoIcon tooltip="If you are a citizen or national of more than one country, list additional countries of nationality in the space provided in Part 14. Additional Information." />
-                  </label>
-                  {renderQuestionGuidance("country_of_citizenship")}
+                    <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                      {labelFor("country_of_citizenship", "Country of Citizenship or Nationality")}
+                      <InfoIcon tooltip="If you are a citizen of more than one country, list others in Part 14." />
+                    </label>
+                    {renderQuestionGuidance("country_of_citizenship")}
                     <select className="form-select" {...register("country_of_citizenship")}>
                       <option value="">Select...</option>
                       {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                     {errors.country_of_citizenship && <p className="error-message">{errors.country_of_citizenship.message}</p>}
                   </div>
-
-                {/* Item 10: Parent U.S. Citizen */}
-                <YesNoField 
-                  name="parent_us_citizen_before_18" 
-                  metaId="parent_us_citizen_before_18"
-                  label="10. Was your parent a U.S. citizen before your 18th birthday?" 
-                  tooltip="Was your mother or father (including adoptive mother or father) a U.S. citizen before your 18th birthday? USCIS uses this to determine whether a different process applies. See the Instructions for more details."
-                />
-
-                {/* Item 11: Disability Accommodations */}
-                <YesNoField 
-                  name="request_disability_accommodations" 
-                  metaId="request_disability_accommodations"
-                  label="11. Do you need disability accommodations?" 
-                  tooltip="Do you have a physical or developmental disability or mental impairment that prevents you from demonstrating your knowledge and understanding of the English language or civics requirements for naturalization? USCIS instructions describe when to include Form N-648."
-                />
-
-                {/* Item 12: Social Security Update */}
-                <YesNoField 
-                  name="ssa_wants_card" 
-                  metaId="ssa_wants_card"
-                  label="12.a. Do you want SSA to issue you a Social Security card?" 
-                  tooltip="Do you want the Social Security Administration (SSA) to issue you an original or replacement Social Security card and update your immigration status with the SSA if and when you are naturalized?"
-                />
-                
-                {watchedData.ssa_wants_card === "yes" && (
-                  <>
-                    <div className="form-group" style={{ marginTop: "10px" }}>
-                      <label className="form-label">12.b. {labelFor("ssn", "Social Security Number (if any)")}</label>
-                      {renderQuestionGuidance("ssn")}
-                      <input type="text" className="form-input" placeholder="XXX-XX-XXXX" style={{ maxWidth: "200px" }} {...register("ssn")} />
                 </div>
-                    <YesNoField 
-                      name="ssa_consent_disclosure" 
-                      metaId="ssa_consent_disclosure"
-                      label="12.c. Do you consent to disclosure of information to SSA?" 
-                      tooltip="I authorize disclosure of information from this application and USCIS systems to the SSA as required for the purpose of assigning me an SSN, issuing me an original or replacement Social Security card, and updating my immigration status with the SSA. USCIS uses this consent if you request a card."
-                    />
-                    {errors.ssa_consent_disclosure && <p className="error-message">{errors.ssa_consent_disclosure.message}</p>}
-                  </>
-                )}
 
-                {watchedData.ssa_wants_card === "no" && (
-                  <p className="helper-text" style={{ marginTop: "-10px" }}>(Go to Part 3.)</p>
-                )}
+                {/* CARD 4: Additional Questions */}
+                <div className="question-card">
+                  <div className="question-card-title">Additional Questions</div>
+
+                  {/* Item 10: Parent U.S. Citizen */}
+                  <YesNoField
+                    name="parent_us_citizen_before_18"
+                    metaId="parent_us_citizen_before_18"
+                    label="Was your parent a U.S. citizen before your 18th birthday?"
+                    tooltip="USCIS uses this to determine whether a different process applies."
+                  />
+
+                  {/* Item 11: Disability Accommodations */}
+                  <YesNoField
+                    name="request_disability_accommodations"
+                    metaId="request_disability_accommodations"
+                    label="Do you need disability accommodations?"
+                    tooltip="For the English language or civics requirements."
+                  />
+
+                  {/* Item 12: Social Security Update */}
+                  <YesNoField
+                    name="ssa_wants_card"
+                    metaId="ssa_wants_card"
+                    label="Do you want SSA to issue you a Social Security card?"
+                    tooltip="The SSA can issue or update your card when you are naturalized."
+                  />
+
+                  {watchedData.ssa_wants_card === "yes" && (
+                    <div style={{ marginTop: "16px", padding: "20px", background: "var(--bg)", borderRadius: "12px" }}>
+                      <div className="form-group" style={{ marginBottom: "20px" }}>
+                        <label className="form-label">{labelFor("ssn", "Social Security Number (if any)")}</label>
+                        <input type="text" className="form-input" placeholder="XXX-XX-XXXX" style={{ maxWidth: "180px" }} {...register("ssn")} />
+                      </div>
+                      <YesNoField
+                        name="ssa_consent_disclosure"
+                        metaId="ssa_consent_disclosure"
+                        label="Do you consent to disclosure of information to SSA?"
+                      />
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
@@ -2364,86 +2659,89 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 3 && (
               <>
-                <p className="helper-text" style={{ marginBottom: "24px", fontSize: "14px" }}>
-                  USCIS requires you to complete the categories below to conduct background checks.
-                </p>
+                {/* CARD 1: Ethnicity & Race */}
+                <div className="question-card">
+                  <div className="question-card-title">Ethnicity & Race</div>
 
-                {/* Item 1: Ethnicity */}
-                <div className="form-group">
-                  <label className="form-label">1. {labelFor("ethnicity", "Ethnicity")}</label>
-                  {renderQuestionGuidance("ethnicity")}
-                  <div className="radio-group">
-                    <div className="radio-option">
-                      <input type="radio" id="ethnicity-hispanic" value="hispanic" {...register("ethnicity")} />
-                      <label htmlFor="ethnicity-hispanic" className="radio-label">Hispanic or Latino</label>
+                  <div className="form-group">
+                    <label className="form-label">{labelFor("ethnicity", "Ethnicity")}</label>
+                    {renderQuestionGuidance("ethnicity")}
+                    <div className="radio-group">
+                      <div className="radio-option wide">
+                        <input type="radio" id="ethnicity-hispanic" value="hispanic" {...register("ethnicity")} />
+                        <label htmlFor="ethnicity-hispanic" className="radio-label">Hispanic or Latino</label>
+                      </div>
+                      <div className="radio-option wide">
+                        <input type="radio" id="ethnicity-not-hispanic" value="not_hispanic" {...register("ethnicity")} />
+                        <label htmlFor="ethnicity-not-hispanic" className="radio-label">Not Hispanic or Latino</label>
+                      </div>
                     </div>
-                    <div className="radio-option">
-                      <input type="radio" id="ethnicity-not-hispanic" value="not_hispanic" {...register("ethnicity")} />
-                      <label htmlFor="ethnicity-not-hispanic" className="radio-label">Not Hispanic or Latino</label>
+                    {errors.ethnicity && <p className="error-message">{errors.ethnicity.message}</p>}
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">{labelFor("race", "Race")} <span style={{ fontWeight: 400, color: "var(--gray)" }}>(select all that apply)</span></label>
+                    {renderQuestionGuidance("race")}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
+                      {RACES.map((race) => (
+                        <label key={race.value} className="checkbox-group">
+                          <input
+                            type="checkbox"
+                            value={race.value}
+                            {...register("race")}
+                            style={{ width: "18px", height: "18px", accentColor: "var(--dark)" }}
+                          />
+                          <span className="checkbox-label">{race.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {errors.race && <p className="error-message">{errors.race.message}</p>}
+                  </div>
+                </div>
+
+                {/* CARD 2: Physical Characteristics */}
+                <div className="question-card">
+                  <div className="question-card-title">Physical Characteristics</div>
+
+                  <div className="form-row-equal">
+                    <div className="form-group">
+                      <label className="form-label">{labelFor("height_feet", "Height")}</label>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <input type="number" className="form-input" placeholder="Feet" style={{ maxWidth: "80px" }} {...register("height_feet")} />
+                        <span style={{ color: "var(--gray)" }}>ft</span>
+                        <input type="number" className="form-input" placeholder="Inches" style={{ maxWidth: "80px" }} {...register("height_inches")} />
+                        <span style={{ color: "var(--gray)" }}>in</span>
+                      </div>
+                      {errors.height_feet && <p className="error-message">{errors.height_feet.message}</p>}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">{labelFor("weight", "Weight")}</label>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <input type="number" className="form-input" placeholder="150" style={{ maxWidth: "100px" }} {...register("weight")} />
+                        <span style={{ color: "var(--gray)" }}>lbs</span>
+                      </div>
+                      {errors.weight && <p className="error-message">{errors.weight.message}</p>}
                     </div>
                   </div>
-                  {errors.ethnicity && <p className="error-message">{errors.ethnicity.message}</p>}
-                </div>
 
-                {/* Item 2: Race */}
-                <div className="form-group">
-                  <label className="form-label">2. {labelFor("race", "Race")}</label>
-                  {renderQuestionGuidance("race")}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
-                    {RACES.map((race) => (
-                      <label key={race.value} className="checkbox-group">
-                        <input
-                          type="checkbox"
-                          value={race.value}
-                          {...register("race")}
-                          style={{ width: "18px", height: "18px", accentColor: "var(--dark)" }}
-                        />
-                        <span className="checkbox-label">{race.label}</span>
-                      </label>
-                    ))}
+                  <div className="form-row-equal">
+                    <div className="form-group">
+                      <label className="form-label">{labelFor("eye_color", "Eye Color")}</label>
+                      <select className="form-select" {...register("eye_color")}>
+                        <option value="">Select...</option>
+                        {EYE_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      {errors.eye_color && <p className="error-message">{errors.eye_color.message}</p>}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">{labelFor("hair_color", "Hair Color")}</label>
+                      <select className="form-select" {...register("hair_color")}>
+                        <option value="">Select...</option>
+                        {HAIR_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      {errors.hair_color && <p className="error-message">{errors.hair_color.message}</p>}
+                    </div>
                   </div>
-                  {errors.race && <p className="error-message">{errors.race.message}</p>}
-                </div>
-
-                {/* Item 3: Height */}
-                <div className="form-row-equal">
-                <div className="form-group">
-                    <label className="form-label">3. {labelFor("height_feet", "Height")}</label>
-                    {renderQuestionGuidance("height_feet")}
-                    <div className="form-row" style={{ gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                      <input type="number" className="form-input" placeholder="Feet" style={{ maxWidth: "80px" }} {...register("height_feet")} />
-                      <input type="number" className="form-input" placeholder="Inches" style={{ maxWidth: "80px" }} {...register("height_inches")} />
-                </div>
-                    {errors.height_feet && <p className="error-message">{errors.height_feet.message}</p>}
-                  </div>
-                <div className="form-group">
-                    <label className="form-label">4. {labelFor("weight", "Weight (Pounds)")}</label>
-                    {renderQuestionGuidance("weight")}
-                    <input type="number" className="form-input" placeholder="150" style={{ maxWidth: "100px" }} {...register("weight")} />
-                    {errors.weight && <p className="error-message">{errors.weight.message}</p>}
-                  </div>
-                </div>
-
-                {/* Item 5: Eye Color */}
-                <div className="form-group">
-                  <label className="form-label">5. {labelFor("eye_color", "Eye color (Select only one box)")}</label>
-                  {renderQuestionGuidance("eye_color")}
-                  <select className="form-select" {...register("eye_color")}>
-                    <option value="">Select...</option>
-                    {EYE_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  {errors.eye_color && <p className="error-message">{errors.eye_color.message}</p>}
-                </div>
-
-                {/* Item 6: Hair Color */}
-                <div className="form-group">
-                  <label className="form-label">6. {labelFor("hair_color", "Hair color (Select only one box)")}</label>
-                  {renderQuestionGuidance("hair_color")}
-                  <select className="form-select" {...register("hair_color")}>
-                    <option value="">Select...</option>
-                    {HAIR_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  {errors.hair_color && <p className="error-message">{errors.hair_color.message}</p>}
                 </div>
               </>
             )}
@@ -2453,26 +2751,27 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 4 && (
               <>
-                <div className="form-row-equal">
-                  <div className="form-group">
-                    <label className="form-label">{labelFor("daytime_phone", "Daytime Phone Number")}</label>
-                    {renderQuestionGuidance("daytime_phone")}
-                    <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("daytime_phone")} />
-                    {errors.daytime_phone && <p className="error-message">{errors.daytime_phone.message}</p>}
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">{labelFor("mobile_phone", "Mobile Phone Number (if any)")}</label>
-                    {renderQuestionGuidance("mobile_phone")}
-                    <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("mobile_phone")} />
-                  </div>
-                </div>
+                <div className="question-card">
+                  <div className="question-card-title">Contact Information</div>
 
-                <div className="form-group">
-                  <label className="form-label">{labelFor("email", "Email Address (if any)")}</label>
-                  {renderQuestionGuidance("email")}
-                  <input type="email" className="form-input" placeholder="you@example.com" {...register("email")} />
-                  <p className="helper-text">USCIS may contact you at this email address</p>
-                  {errors.email && <p className="error-message">{errors.email.message}</p>}
+                  <div className="form-row-equal">
+                    <div className="form-group">
+                      <label className="form-label">{labelFor("daytime_phone", "Daytime Phone Number")}</label>
+                      <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("daytime_phone")} />
+                      {errors.daytime_phone && <p className="error-message">{errors.daytime_phone.message}</p>}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">{labelFor("mobile_phone", "Mobile Phone (optional)")}</label>
+                      <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("mobile_phone")} />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">{labelFor("email", "Email Address (optional)")}</label>
+                    <input type="email" className="form-input" placeholder="you@example.com" style={{ maxWidth: "320px" }} {...register("email")} />
+                    <p className="helper-text">USCIS may contact you at this email address</p>
+                    {errors.email && <p className="error-message">{errors.email.message}</p>}
+                  </div>
                 </div>
               </>
             )}
@@ -2482,95 +2781,91 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 5 && (
               <>
-                <p className="helper-text" style={{ marginBottom: "24px" }}>
-                  List every location where you have lived during the last 5 years if you are filing based on the general provision under Part 1., Item Number 1.a. If you are filing based on other naturalization eligibility options, see Part 4. in the Specific Instructions by Item Number section of the Instructions for the applicable period of time for which you must enter this information.
-                </p>
+                {/* CARD 1: Current Address */}
+                <div className="question-card">
+                  <div className="question-card-title">Current Physical Address</div>
 
-                {/* Item 1: Physical Addresses */}
-                <div className="form-group">
-                  <label className="form-label">1. Physical Addresses</label>
-                  <div className="form-group" style={{ marginTop: "12px", padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
-                    <label className="form-label" style={{ fontSize: "14px", marginBottom: "8px" }}>Current Physical Address</label>
-                    {renderQuestionGuidance("street_address")}
-                    <div className="form-row" style={{ gridTemplateColumns: "1fr 120px", gap: "8px" }}>
-                      <input type="text" className="form-input" placeholder={labelFor("street_address", "Street Number and Name")} {...register("street_address")} />
-                    <input type="text" className="form-input" placeholder={labelFor("apt_ste_flr", "Apt/Ste/Flr")} {...register("apt_ste_flr")} />
-                  </div>
-                  {errors.street_address && <p className="error-message">{errors.street_address.message}</p>}
-
-                    <div className="form-row-thirds" style={{ marginTop: "12px" }}>
                   <div className="form-group">
-                        <label className="form-label" style={{ fontSize: "14px" }}>{labelFor("city", "City or Town")}</label>
-                    <input type="text" className="form-input" placeholder="City" {...register("city")} />
-                    {errors.city && <p className="error-message">{errors.city.message}</p>}
-                  </div>
-                  <div className="form-group">
-                        <label className="form-label" style={{ fontSize: "14px" }}>{labelFor("state", "State / Province")}</label>
-                    <select className="form-select" {...register("state")}>
-                      <option value="">Select...</option>
-                      {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    {errors.state && <p className="error-message">{errors.state.message}</p>}
-                  </div>
-                  <div className="form-group">
-                        <label className="form-label" style={{ fontSize: "14px" }}>{labelFor("zip_code", "ZIP Code / Postal Code")}</label>
-                        <input type="text" className="form-input" placeholder="ZIP" {...register("zip_code")} />
-                    {errors.zip_code && <p className="error-message">{errors.zip_code.message}</p>}
-                  </div>
-                </div>
-
-                    <div className="form-row-equal" style={{ marginTop: "12px" }}>
-                <div className="form-group">
-                        <label className="form-label" style={{ fontSize: "14px" }}>{labelFor("residence_from", "Dates of Residence: From (mm/dd/yyyy)")}</label>
-                        <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "150px" }} {...register("residence_from")} />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label" style={{ fontSize: "14px" }}>{labelFor("residence_to", "Dates of Residence: To (mm/dd/yyyy) or PRESENT")}</label>
-                        <input type="text" className="form-input" placeholder="MM/DD/YYYY or PRESENT" style={{ maxWidth: "150px" }} {...register("residence_to")} />
-                      </div>
+                    <label className="form-label">Street Address</label>
+                    <div className="form-row" style={{ gridTemplateColumns: "1fr 120px", gap: "12px" }}>
+                      <input type="text" className="form-input" placeholder="Street Number and Name" {...register("street_address")} />
+                      <input type="text" className="form-input" placeholder="Apt/Ste/Flr" {...register("apt_ste_flr")} />
                     </div>
+                    {errors.street_address && <p className="error-message">{errors.street_address.message}</p>}
                   </div>
-                </div>
 
-                {/* Item 2: Mailing Address Same as Physical */}
-                <YesNoField name="mailing_same_as_residence" metaId="mailing_same_as_residence" label="2. Is your current physical address also your current mailing address?" />
-
-                {/* Item 3: Mailing Address (if different) - Only show if "No" */}
-                {watchedData.mailing_same_as_residence === "no" && (
-                  <div className="form-group" style={{ marginTop: "20px" }}>
-                    <label className="form-label">3. Current Mailing Address (Safe Mailing Address, if applicable)</label>
-                    <div className="form-group" style={{ marginTop: "12px", padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
+                  <div className="form-row-thirds">
                     <div className="form-group">
-                        <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("mailing_street_address", "Street Number and Name")}</label>
-                        <div className="form-row" style={{ gridTemplateColumns: "1fr 120px", gap: "8px" }}>
-                          <input type="text" className="form-input" placeholder={labelFor("mailing_street_address", "Street Address")} {...register("mailing_street_address")} />
-                          <input type="text" className="form-input" placeholder={labelFor("mailing_apt_ste_flr", "Apt/Ste/Flr")} {...register("mailing_apt_ste_flr")} />
+                      <label className="form-label">City or Town</label>
+                      <input type="text" className="form-input" placeholder="City" {...register("city")} />
+                      {errors.city && <p className="error-message">{errors.city.message}</p>}
                     </div>
-                      </div>
-                      <div className="form-group" style={{ marginTop: "12px" }}>
-                        <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("mailing_in_care_of", "In Care Of Name (if any)")}</label>
-                        <input type="text" className="form-input" placeholder="In Care Of Name" {...register("mailing_in_care_of")} />
-                      </div>
-                      <div className="form-row-thirds" style={{ marginTop: "12px" }}>
-                        <div className="form-group">
-                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("mailing_city", "City or Town")}</label>
-                      <input type="text" className="form-input" placeholder="City" {...register("mailing_city")} />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("mailing_state", "State / Province")}</label>
-                      <select className="form-select" {...register("mailing_state")}>
-                            <option value="">Select...</option>
+                    <div className="form-group">
+                      <label className="form-label">State</label>
+                      <select className="form-select" {...register("state")}>
+                        <option value="">Select...</option>
                         {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
+                      {errors.state && <p className="error-message">{errors.state.message}</p>}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">ZIP Code</label>
+                      <input type="text" className="form-input" placeholder="ZIP" {...register("zip_code")} />
+                      {errors.zip_code && <p className="error-message">{errors.zip_code.message}</p>}
+                    </div>
+                  </div>
+
+                  <div className="form-row-equal">
+                    <div className="form-group">
+                      <label className="form-label">Living here since</label>
+                      <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "150px" }} {...register("residence_from")} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Until</label>
+                      <input type="text" className="form-input" placeholder="PRESENT" style={{ maxWidth: "150px" }} {...register("residence_to")} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* CARD 2: Mailing Address */}
+                <div className="question-card">
+                  <div className="question-card-title">Mailing Address</div>
+
+                  <YesNoField name="mailing_same_as_residence" metaId="mailing_same_as_residence" label="Is your mailing address the same as above?" />
+
+                  {watchedData.mailing_same_as_residence === "no" && (
+                    <div style={{ marginTop: "20px", padding: "20px", background: "var(--bg)", borderRadius: "12px" }}>
+                      <div className="form-group">
+                        <label className="form-label">Street Address</label>
+                        <div className="form-row" style={{ gridTemplateColumns: "1fr 120px", gap: "12px" }}>
+                          <input type="text" className="form-input" placeholder="Street Address" {...register("mailing_street_address")} />
+                          <input type="text" className="form-input" placeholder="Apt/Ste/Flr" {...register("mailing_apt_ste_flr")} />
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">In Care Of (if any)</label>
+                        <input type="text" className="form-input" placeholder="In Care Of Name" {...register("mailing_in_care_of")} />
+                      </div>
+                      <div className="form-row-thirds">
+                        <div className="form-group">
+                          <label className="form-label">City</label>
+                          <input type="text" className="form-input" placeholder="City" {...register("mailing_city")} />
                         </div>
                         <div className="form-group">
-                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("mailing_zip_code", "ZIP Code / Postal Code")}</label>
-                      <input type="text" className="form-input" placeholder="ZIP" {...register("mailing_zip_code")} />
+                          <label className="form-label">State</label>
+                          <select className="form-select" {...register("mailing_state")}>
+                            <option value="">Select...</option>
+                            {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">ZIP Code</label>
+                          <input type="text" className="form-input" placeholder="ZIP" {...register("mailing_zip_code")} />
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </>
             )}
 
@@ -2579,24 +2874,28 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 8 && (
               <>
-                <p className="helper-text" style={{ marginBottom: "24px" }}>
-                  {watchedData.eligibility_basis === "5year" || watchedData.eligibility_basis === "3year_marriage" ? (
-                    <>List where you have worked or attended school full time or part time during the last <strong>5 years</strong> if you are filing based on the general provision under Part 1., Item Number 1.a.</>
-                  ) : watchedData.eligibility_basis === "military_current" || watchedData.eligibility_basis === "military_former" ? (
-                    <>List where you have worked or attended school full time or part time during the last <strong>5 years</strong>.</>
-                  ) : watchedData.eligibility_basis === "qualified_employment" ? (
-                    <>List where you have worked or attended school full time or part time during the last <strong>3 years</strong> if you are filing under INA section 319(b).</>
-                  ) : (
-                    <>List where you have worked or attended school full time or part time during the applicable period. See Part 7. in the Specific Instructions by Item Number section of the Instructions for the applicable period of time for which you must enter this information.</>
-                  )} Provide information for the complete time period for all employment, including foreign government employment such as military, police, and intelligence services. Begin by providing information about your most recent or current employment, studies, or unemployment. Provide the locations and dates where you worked, were self-employed, were unemployed, or have studied. If you worked for yourself and not for a specific employer, type or print "self-employed" for the employer name. If you were unemployed, type or print "unemployed." If you are retired, type or print "retired." If you need extra space to complete Part 7., use the space provided in Part 14. Additional Information.
-                </p>
+                {/* Card: Employment & School History */}
+                <div className="question-card">
+                  <div className="question-card-title">Employment & School History</div>
 
-                {/* Employment History */}
-                <div className="form-group">
-                  <label className="form-label">1. Employment and School History</label>
-                  <p className="helper-text" style={{ marginBottom: "16px", marginTop: "8px" }}>
-                    Begin by providing information about your most recent or current employment, studies, or unemployment. If you worked for yourself, type "self-employed". If you were unemployed, type "unemployed." If you are retired, type "retired."
+                  <p className="helper-text" style={{ marginBottom: "24px" }}>
+                    {watchedData.eligibility_basis === "5year" || watchedData.eligibility_basis === "3year_marriage" ? (
+                      <>List where you have worked or attended school full time or part time during the last <strong>5 years</strong> if you are filing based on the general provision under Part 1., Item Number 1.a.</>
+                    ) : watchedData.eligibility_basis === "military_current" || watchedData.eligibility_basis === "military_former" ? (
+                      <>List where you have worked or attended school full time or part time during the last <strong>5 years</strong>.</>
+                    ) : watchedData.eligibility_basis === "qualified_employment" ? (
+                      <>List where you have worked or attended school full time or part time during the last <strong>3 years</strong> if you are filing under INA section 319(b).</>
+                    ) : (
+                      <>List where you have worked or attended school full time or part time during the applicable period. See Part 7. in the Specific Instructions by Item Number section of the Instructions for the applicable period of time for which you must enter this information.</>
+                    )} Provide information for the complete time period for all employment, including foreign government employment such as military, police, and intelligence services.
                   </p>
+
+                  {/* Employment History */}
+                  <div className="form-group">
+                    <label className="form-label">1. Employment and School History</label>
+                    <p className="helper-text" style={{ marginBottom: "16px", marginTop: "8px" }}>
+                      Begin by providing information about your most recent or current employment, studies, or unemployment. If you worked for yourself, type "self-employed". If you were unemployed, type "unemployed." If you are retired, type "retired."
+                    </p>
                   
                   {/* Employment Table */}
                   <div style={{ marginTop: "16px" }}>
@@ -2735,8 +3034,9 @@ export default function N400Form() {
                         Maximum of 3 entries reached. If you need to add more employment or school entries, use Part 14. Additional Information.
                       </p>
                     )}
+                  </div>
                 </div>
-                </div>
+              </div>
               </>
             )}
 
@@ -2745,98 +3045,103 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 9 && (
               <>
-                <p className="helper-text" style={{ marginBottom: "24px" }}>
-                  {watchedData.eligibility_basis === "5year" || watchedData.eligibility_basis === "3year_marriage" ? (
-                    <>List below all the trips that you have taken outside the United States during the last <strong>5 years</strong> if you are filing based on the general provision under Part 1., Item Number 1.a.</>
-                  ) : watchedData.eligibility_basis === "military_current" || watchedData.eligibility_basis === "military_former" ? (
-                    <>List below all the trips that you have taken outside the United States during the last <strong>5 years</strong>.</>
-                  ) : watchedData.eligibility_basis === "qualified_employment" ? (
-                    <>List below all the trips that you have taken outside the United States during the last <strong>3 years</strong> if you are filing under INA section 319(b).</>
-                  ) : (
-                    <>List below all the trips that you have taken outside the United States during the applicable period. See Part 8. in the Specific Instructions by Item Number section of the Instructions for the applicable period of time for which you must enter this information.</>
-                  )} Start with your most recent trip and work backwards. Do not include day trips (where the entire trip was completed within 24 hours) in the table. If you have taken any trips outside the United States that lasted more than 6 months, see the Required Evidence - Continuous Residence section of the Instructions for evidence you should provide.
-                </p>
+                {/* Card: Travel History */}
+                <div className="question-card">
+                  <div className="question-card-title">Travel History</div>
 
-                {/* Trip Details Table */}
-                <div className="form-group">
-                  <label className="form-label">1. Trip Details</label>
-                  <p className="helper-text" style={{ marginBottom: "12px" }}>
-                    Start with your most recent trip and work backwards. If you need extra space, use Part 14. Additional Information.
+                  <p className="helper-text" style={{ marginBottom: "24px" }}>
+                    {watchedData.eligibility_basis === "5year" || watchedData.eligibility_basis === "3year_marriage" ? (
+                      <>List below all the trips that you have taken outside the United States during the last <strong>5 years</strong>.</>
+                    ) : watchedData.eligibility_basis === "military_current" || watchedData.eligibility_basis === "military_former" ? (
+                      <>List below all the trips that you have taken outside the United States during the last <strong>5 years</strong>.</>
+                    ) : watchedData.eligibility_basis === "qualified_employment" ? (
+                      <>List below all the trips that you have taken outside the United States during the last <strong>3 years</strong> if you are filing under INA section 319(b).</>
+                    ) : (
+                      <>List below all the trips that you have taken outside the United States during the applicable period.</>
+                    )} Start with your most recent trip and work backwards. Do not include day trips (where the entire trip was completed within 24 hours).
                   </p>
-                  
-                  {tripFields.length === 0 && (
-                    <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginBottom: "16px" }}>
-                      <p style={{ fontSize: "14px", color: "var(--gray)", marginBottom: "12px" }}>No trips added yet. Click "Add Trip" to begin.</p>
-                      <button
-                        type="button"
-                        onClick={() => appendTrip({ date_left_us: "", date_returned_us: "", countries_traveled: "" })}
-                        className="save-btn"
-                        style={{ padding: "8px 16px", fontSize: "14px" }}
-                      >
-                        + Add Trip
-                      </button>
-                    </div>
-                  )}
 
-                  {/* Display trips */}
-                  {tripFields.length > 0 && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                      {tripFields.map((field, index) => (
-                        <div key={field.id} style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                            <h4 style={{ fontSize: "16px", fontWeight: "600" }}>Trip {index + 1}</h4>
-                            <button
-                              type="button"
-                              onClick={() => removeTrip(index)}
-                              style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                          <div className="form-row-equal">
-                            <div className="form-group">
-                              <label className="form-label" style={{ fontSize: "14px" }}>Date You Left the United States (mm/dd/yyyy)</label>
-                              <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`trips.${index}.date_left_us`)} />
-                            </div>
-                            <div className="form-group">
-                              <label className="form-label" style={{ fontSize: "14px" }}>Date You Returned to the United States (mm/dd/yyyy)</label>
-                              <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`trips.${index}.date_returned_us`)} />
-                            </div>
-                          </div>
-                          <div className="form-group" style={{ marginTop: "12px" }}>
-                            <label className="form-label" style={{ fontSize: "14px" }}>Countries to Which You Traveled</label>
-                            <input type="text" className="form-input" placeholder="List all countries visited" {...register(`trips.${index}.countries_traveled`)} />
-                          </div>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => appendTrip({ date_left_us: "", date_returned_us: "", countries_traveled: "" })}
-                        className="save-btn"
-                        style={{ padding: "8px 16px", fontSize: "14px", alignSelf: "flex-start" }}
-                      >
-                        + Add Another Trip
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="form-group" style={{ marginTop: "24px" }}>
-                  <label className="form-label">{labelFor("total_days_outside_us", "Total Days Outside United States")}</label>
-                  {renderQuestionGuidance("total_days_outside_us")}
-                  <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "120px" }} {...register("total_days_outside_us")} />
-                  <p className="helper-text" style={{ marginTop: "4px" }}>Add up all the days from all your trips</p>
-                </div>
-
-                <YesNoField name="trips_over_6_months" metaId="trips_over_6_months" label="Have you taken any trip outside the United States that lasted more than 6 months?" />
-
-                {watchedData.trips_over_6_months === "yes" && (
-                  <div style={{ marginTop: "16px", padding: "16px", background: "#FEF3C7", borderRadius: "8px", border: "1px solid #F59E0B" }}>
-                    <p style={{ color: "#92400E", fontSize: "14px" }}>
-                      ⚠️ USCIS reviews continuous residence for trips of 6 months or more. See the Required Evidence - Continuous Residence section of the Instructions for details.
+                  {/* Trip Details */}
+                  <div className="form-group">
+                    <label className="form-label">1. Trip Details</label>
+                    <p className="helper-text" style={{ marginBottom: "12px" }}>
+                      Start with your most recent trip and work backwards. If you need extra space, use Part 14. Additional Information.
                     </p>
+
+                    {tripFields.length === 0 && (
+                      <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginBottom: "16px" }}>
+                        <p style={{ fontSize: "14px", color: "var(--gray)", marginBottom: "12px" }}>No trips added yet. Click "Add Trip" to begin.</p>
+                        <button
+                          type="button"
+                          onClick={() => appendTrip({ date_left_us: "", date_returned_us: "", countries_traveled: "" })}
+                          className="save-btn"
+                          style={{ padding: "8px 16px", fontSize: "14px" }}
+                        >
+                          + Add Trip
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Display trips */}
+                    {tripFields.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                        {tripFields.map((field, index) => (
+                          <div key={field.id} style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                              <h4 style={{ fontSize: "16px", fontWeight: "600" }}>Trip {index + 1}</h4>
+                              <button
+                                type="button"
+                                onClick={() => removeTrip(index)}
+                                style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                            <div className="form-row-equal">
+                              <div className="form-group">
+                                <label className="form-label" style={{ fontSize: "14px" }}>Date You Left the United States (mm/dd/yyyy)</label>
+                                <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`trips.${index}.date_left_us`)} />
+                              </div>
+                              <div className="form-group">
+                                <label className="form-label" style={{ fontSize: "14px" }}>Date You Returned to the United States (mm/dd/yyyy)</label>
+                                <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`trips.${index}.date_returned_us`)} />
+                              </div>
+                            </div>
+                            <div className="form-group" style={{ marginTop: "12px" }}>
+                              <label className="form-label" style={{ fontSize: "14px" }}>Countries to Which You Traveled</label>
+                              <input type="text" className="form-input" placeholder="List all countries visited" {...register(`trips.${index}.countries_traveled`)} />
+                            </div>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => appendTrip({ date_left_us: "", date_returned_us: "", countries_traveled: "" })}
+                          className="save-btn"
+                          style={{ padding: "8px 16px", fontSize: "14px", alignSelf: "flex-start" }}
+                        >
+                          + Add Another Trip
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
+
+                  <div className="form-group" style={{ marginTop: "24px" }}>
+                    <label className="form-label">{labelFor("total_days_outside_us", "Total Days Outside United States")}</label>
+                    {renderQuestionGuidance("total_days_outside_us")}
+                    <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "120px" }} {...register("total_days_outside_us")} />
+                    <p className="helper-text" style={{ marginTop: "4px" }}>Add up all the days from all your trips</p>
+                  </div>
+
+                  <YesNoField name="trips_over_6_months" metaId="trips_over_6_months" label="Have you taken any trip outside the United States that lasted more than 6 months?" />
+
+                  {watchedData.trips_over_6_months === "yes" && (
+                    <div style={{ marginTop: "16px", padding: "16px", background: "#FEF3C7", borderRadius: "8px", border: "1px solid #F59E0B" }}>
+                      <p style={{ color: "#92400E", fontSize: "14px" }}>
+                        USCIS reviews continuous residence for trips of 6 months or more. See the Required Evidence - Continuous Residence section of the Instructions for details.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
@@ -2845,145 +3150,151 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 6 && (
               <>
-                {/* Item 1: Current Marital Status */}
-                <div className="form-group">
-                  <label className="form-label">1. {labelFor("marital_status", "What is your current marital status?")}</label>
-                  {renderQuestionGuidance("marital_status")}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
-                    {[
-                      { value: "single", label: "Single, Never Married" },
-                      { value: "married", label: "Married" },
-                      { value: "divorced", label: "Divorced" },
-                      { value: "widowed", label: "Widowed" },
-                      { value: "separated", label: "Separated" },
-                      { value: "annulled", label: "Marriage Annulled" }
-                    ].map(status => (
-                      <label key={status.value} className="radio-option" style={{ flex: "0 0 auto" }}>
-                        <input type="radio" value={status.value} {...register("marital_status")} />
-                        <span className="radio-label" style={{ padding: "10px 20px" }}>{status.label}</span>
-                      </label>
-                    ))}
+                {/* Card: Marital Status */}
+                <div className="question-card">
+                  <div className="question-card-title">Marital Status</div>
+
+                  {/* Item 1: Current Marital Status */}
+                  <div className="form-group">
+                    <label className="form-label">1. {labelFor("marital_status", "What is your current marital status?")}</label>
+                    {renderQuestionGuidance("marital_status")}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
+                      {[
+                        { value: "single", label: "Single, Never Married" },
+                        { value: "married", label: "Married" },
+                        { value: "divorced", label: "Divorced" },
+                        { value: "widowed", label: "Widowed" },
+                        { value: "separated", label: "Separated" },
+                        { value: "annulled", label: "Marriage Annulled" }
+                      ].map(status => (
+                        <label key={status.value} className="radio-option" style={{ flex: "0 0 auto" }}>
+                          <input type="radio" value={status.value} {...register("marital_status")} />
+                          <span className="radio-label" style={{ padding: "10px 20px" }}>{status.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {errors.marital_status && <p className="error-message">{errors.marital_status.message}</p>}
                   </div>
-                  {errors.marital_status && <p className="error-message">{errors.marital_status.message}</p>}
+
+                  {watchedData.marital_status === "single" && (
+                    <p className="helper-text" style={{ marginTop: "-10px" }}>If you are single and have never married, go to Part 6. Information About Your Children.</p>
+                  )}
+
+                  {watchedData.marital_status && watchedData.marital_status !== "single" && (
+                    <>
+                      {/* Item 2: Spouse Military Member (only if married) */}
+                      {watchedData.marital_status === "married" && (
+                        <YesNoField name="spouse_is_military_member" metaId="spouse_is_military_member" label="2. If you are currently married, is your spouse a current member of the U.S. armed forces?" />
+                      )}
+
+                      {/* Item 3: Times Married */}
+                      <div className="form-group">
+                        <label className="form-label">3. {labelFor("times_married", "How many times have you been married?")}</label>
+                        {renderQuestionGuidance("times_married")}
+                        <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("times_married")} />
+                        <p className="helper-text" style={{ marginTop: "4px" }}>Provide current marriage certificate and any divorce decree, annulment decree, or death certificate showing that your prior marriages were terminated (if applicable).</p>
+                      </div>
+                    </>
+                  )}
                 </div>
 
-                {watchedData.marital_status === "single" && (
-                  <p className="helper-text" style={{ marginTop: "-10px" }}>If you are single and have never married, go to Part 6. Information About Your Children.</p>
-                )}
+                {/* Card: Spouse Information (conditional) */}
+                {(watchedData.marital_status === "married" || watchedData.eligibility_basis === "3year_marriage" || watchedData.eligibility_basis === "qualified_employment") && (
+                  <div className="question-card">
+                    <div className="question-card-title">Spouse Information</div>
+                    <p className="helper-text" style={{ marginBottom: "20px" }}>
+                      If you are filing under one of the categories below, answer Item Numbers 4.a. - 8.:<br />
+                      Spouse of U.S. Citizen, Part 1., Item Number 1.b.; or;<br />
+                      Spouse of U.S. Citizen in Qualified Employment Outside the United States, Part 1., Item Number 1.d.
+                    </p>
 
-                {watchedData.marital_status && watchedData.marital_status !== "single" && (
-                  <>
-                    {/* Item 2: Spouse Military Member (only if married) */}
-                    {watchedData.marital_status === "married" && (
-                      <YesNoField name="spouse_is_military_member" metaId="spouse_is_military_member" label="2. If you are currently married, is your spouse a current member of the U.S. armed forces?" />
-                    )}
-
-                    {/* Item 3: Times Married */}
-                  <div className="form-group">
-                      <label className="form-label">3. {labelFor("times_married", "How many times have you been married?")}</label>
-                      {renderQuestionGuidance("times_married")}
-                      <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("times_married")} />
-                      <p className="helper-text" style={{ marginTop: "4px" }}>Provide current marriage certificate and any divorce decree, annulment decree, or death certificate showing that your prior marriages were terminated (if applicable).</p>
+                    {/* Item 4.a: Current Spouse's Legal Name */}
+                    <div className="form-group">
+                      <label className="form-label">4.a. Current Spouse's Legal Name</label>
+                      <div className="form-row-thirds">
+                        <div>
+                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Family Name (Last Name)</label>
+                          <input type="text" className="form-input" {...register("spouse_last_name")} />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Given Name (First Name)</label>
+                          <input type="text" className="form-input" {...register("spouse_first_name")} />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Middle Name (if applicable)</label>
+                          <input type="text" className="form-input" {...register("spouse_middle_name")} />
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Conditional sections for married filers */}
-                    {(watchedData.marital_status === "married" || watchedData.eligibility_basis === "3year_marriage" || watchedData.eligibility_basis === "qualified_employment") && (
-                      <>
-                        <p className="helper-text" style={{ marginTop: "20px", marginBottom: "12px", fontWeight: "500" }}>
-                          If you are filing under one of the categories below, answer Item Numbers 4.a. - 8.:<br />
-                          Spouse of U.S. Citizen, Part 1., Item Number 1.b.; or;<br />
-                          Spouse of U.S. Citizen in Qualified Employment Outside the United States, Part 1., Item Number 1.d.
-                        </p>
+                    {/* Item 4.b: Spouse Date of Birth */}
+                    <div className="form-group">
+                      <label className="form-label">4.b. Current Spouse's Date of Birth (mm/dd/yyyy)</label>
+                      <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_of_birth")} />
+                    </div>
 
-                        {/* Item 4.a: Current Spouse's Legal Name */}
-                        <div className="form-group">
-                          <label className="form-label">4.a. Current Spouse's Legal Name</label>
-                          <div className="form-row-thirds">
-                            <div>
-                              <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Family Name (Last Name)</label>
-                              <input type="text" className="form-input" {...register("spouse_last_name")} />
-                  </div>
-                            <div>
-                              <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Given Name (First Name)</label>
-                              <input type="text" className="form-input" {...register("spouse_first_name")} />
+                    {/* Item 4.c: Date Entered into Marriage */}
+                    <div className="form-group">
+                      <label className="form-label">4.c. Date You Entered into Marriage with Current Spouse (mm/dd/yyyy)</label>
+                      <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_of_marriage")} />
+                    </div>
+
+                    {/* Item 4.d: Spouse Address Same */}
+                    <YesNoField name="spouse_address_same_as_applicant" metaId="spouse_address_same_as_applicant" label="4.d. Is your current spouse's present physical address the same as your physical address?" />
+                    {watchedData.spouse_address_same_as_applicant === "no" && (
+                      <p className="helper-text" style={{ marginTop: "-10px" }}>If you answered "No," provide address in Part 14. Additional Information.</p>
+                    )}
+
+                    {/* Item 5.a: When did spouse become citizen */}
+                    <YesNoField name="spouse_is_us_citizen" metaId="spouse_is_us_citizen" label="5.a. When did your current spouse become a U.S. citizen?" />
+
+                    {watchedData.spouse_is_us_citizen === "yes" && (
+                      <>
+                        <div className="form-group" style={{ marginTop: "10px" }}>
+                          <label className="form-label">How did your spouse become a U.S. citizen?</label>
+                          <div className="radio-group">
+                            <div className="radio-option">
+                              <input type="radio" id="spouse-citizen-birth-yes" value="yes" {...register("spouse_citizenship_by_birth")} />
+                              <label htmlFor="spouse-citizen-birth-yes" className="radio-label">By Birth in the United States - Go to Item Number 7.</label>
                             </div>
-                            <div>
-                              <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Middle Name (if applicable)</label>
-                              <input type="text" className="form-input" {...register("spouse_middle_name")} />
+                            <div className="radio-option">
+                              <input type="radio" id="spouse-citizen-birth-no" value="no" {...register("spouse_citizenship_by_birth")} />
+                              <label htmlFor="spouse-citizen-birth-no" className="radio-label">Other - Complete Item Number 5.b.</label>
                             </div>
                           </div>
+                          {renderQuestionGuidance("spouse_citizenship_by_birth")}
                         </div>
 
-                        {/* Item 4.b: Spouse Date of Birth */}
-                  <div className="form-group">
-                          <label className="form-label">4.b. Current Spouse's Date of Birth (mm/dd/yyyy)</label>
-                          <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_of_birth")} />
-                  </div>
-
-                        {/* Item 4.c: Date Entered into Marriage */}
-                        <div className="form-group">
-                          <label className="form-label">4.c. Date You Entered into Marriage with Current Spouse (mm/dd/yyyy)</label>
-                          <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_of_marriage")} />
-                </div>
-
-                        {/* Item 4.d: Spouse Address Same */}
-                        <YesNoField name="spouse_address_same_as_applicant" metaId="spouse_address_same_as_applicant" label="4.d. Is your current spouse's present physical address the same as your physical address?" />
-                        {watchedData.spouse_address_same_as_applicant === "no" && (
-                          <p className="helper-text" style={{ marginTop: "-10px" }}>If you answered "No," provide address in Part 14. Additional Information.</p>
+                        {watchedData.spouse_citizenship_by_birth === "no" && (
+                          <div className="form-group">
+                            <label className="form-label">5.b. Date Your Current Spouse Became a U.S. Citizen (mm/dd/yyyy)</label>
+                            <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_became_citizen")} />
+                          </div>
                         )}
-
-                        {/* Item 5.a: When did spouse become citizen */}
-                        <YesNoField name="spouse_is_us_citizen" metaId="spouse_is_us_citizen" label="5.a. When did your current spouse become a U.S. citizen?" />
-                        
-                        {watchedData.spouse_is_us_citizen === "yes" && (
-                          <>
-                            <div className="form-group" style={{ marginTop: "10px" }}>
-                              <label className="form-label">How did your spouse become a U.S. citizen?</label>
-                              <div className="radio-group">
-                                <div className="radio-option">
-                                  <input type="radio" id="spouse-citizen-birth-yes" value="yes" {...register("spouse_citizenship_by_birth")} />
-                                  <label htmlFor="spouse-citizen-birth-yes" className="radio-label">By Birth in the United States - Go to Item Number 7.</label>
-                                </div>
-                                <div className="radio-option">
-                                  <input type="radio" id="spouse-citizen-birth-no" value="no" {...register("spouse_citizenship_by_birth")} />
-                                  <label htmlFor="spouse-citizen-birth-no" className="radio-label">Other - Complete Item Number 5.b.</label>
-                                </div>
-                              </div>
-                              {renderQuestionGuidance("spouse_citizenship_by_birth")}
-                            </div>
-
-                            {watchedData.spouse_citizenship_by_birth === "no" && (
-                  <div className="form-group">
-                                <label className="form-label">5.b. Date Your Current Spouse Became a U.S. Citizen (mm/dd/yyyy)</label>
-                                <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_became_citizen")} />
-                  </div>
-                            )}
-                          </>
-                        )}
-
-                        {/* Item 6: Spouse A-Number */}
-                  <div className="form-group">
-                          <label className="form-label">6. Current Spouse's Alien Registration Number (A-Number) (if any)</label>
-                          <input type="text" className="form-input" placeholder="A-XXXXXXXXX" style={{ maxWidth: "200px" }} {...register("spouse_a_number")} />
-                  </div>
-
-                        {/* Item 7: Spouse Times Married */}
-                        <div className="form-group">
-                          <label className="form-label">7. {labelFor("spouse_times_married", "How many times has your current spouse been married?")}</label>
-                          {renderQuestionGuidance("spouse_times_married")}
-                          <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("spouse_times_married")} />
-                          <p className="helper-text" style={{ marginTop: "4px" }}>Provide divorce decrees, annulment decrees, or death certificates showing that all of your spouse's prior marriages were terminated (if applicable).</p>
-                        </div>
-
-                        {/* Item 8: Spouse Current Employer */}
-                        <div className="form-group">
-                          <label className="form-label">8. {labelFor("spouse_current_employer", "Current Spouse's Current Employer or Company")}</label>
-                          {renderQuestionGuidance("spouse_current_employer")}
-                          <input type="text" className="form-input" {...register("spouse_current_employer")} />
-                </div>
                       </>
                     )}
-                  </>
+
+                    {/* Item 6: Spouse A-Number */}
+                    <div className="form-group">
+                      <label className="form-label">6. Current Spouse's Alien Registration Number (A-Number) (if any)</label>
+                      <input type="text" className="form-input" placeholder="A-XXXXXXXXX" style={{ maxWidth: "200px" }} {...register("spouse_a_number")} />
+                    </div>
+
+                    {/* Item 7: Spouse Times Married */}
+                    <div className="form-group">
+                      <label className="form-label">7. {labelFor("spouse_times_married", "How many times has your current spouse been married?")}</label>
+                      {renderQuestionGuidance("spouse_times_married")}
+                      <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("spouse_times_married")} />
+                      <p className="helper-text" style={{ marginTop: "4px" }}>Provide divorce decrees, annulment decrees, or death certificates showing that all of your spouse's prior marriages were terminated (if applicable).</p>
+                    </div>
+
+                    {/* Item 8: Spouse Current Employer */}
+                    <div className="form-group">
+                      <label className="form-label">8. {labelFor("spouse_current_employer", "Current Spouse's Current Employer or Company")}</label>
+                      {renderQuestionGuidance("spouse_current_employer")}
+                      <input type="text" className="form-input" {...register("spouse_current_employer")} />
+                    </div>
+                  </div>
                 )}
               </>
             )}
@@ -2993,400 +3304,156 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 7 && (
               <>
-                <div className="form-group">
-                  <label className="form-label">1. {labelFor("total_children", "Indicate your total number of children under 18 years of age.")}</label>
-                  {renderQuestionGuidance("total_children")}
-                  <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("total_children")} />
-                </div>
+                {/* Card: Children Information */}
+                <div className="question-card">
+                  <div className="question-card-title">Children Information</div>
 
-                {parseInt(watchedData.total_children || "0") > 0 && (
-                  <div>
-                    <div className="form-group" style={{ marginTop: "20px" }}>
-                      <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
-                        2. Provide information about your children
-                        <InfoIcon tooltip="For the residence and relationship columns, you must type or print one of the valid options listed. If any of your children do not reside with you, provide the address(es) where those children live in Part 14. Additional Information. If you have more than three children, use the space provided in Part 14. Additional Information." />
-                      </label>
-                      
-                      {childrenFields.slice(0, Math.min(parseInt(watchedData.total_children || "0"), 10)).map((field, index) => (
-                        <div key={field.id} style={{ marginBottom: "24px", padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                            <h3 style={{ fontSize: "16px", fontWeight: "600" }}>Child {index + 1}</h3>
-                            {index >= parseInt(watchedData.total_children || "0") && (
-                              <button
-                                type="button"
-                                onClick={() => removeChild(index)}
-                                style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            )}
+                  <div className="form-group">
+                    <label className="form-label">1. {labelFor("total_children", "Indicate your total number of children under 18 years of age.")}</label>
+                    {renderQuestionGuidance("total_children")}
+                    <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("total_children")} />
+                  </div>
+
+                  {parseInt(watchedData.total_children || "0") > 0 && (
+                    <>
+                      <div className="form-group" style={{ marginTop: "24px" }}>
+                        <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                          2. Provide information about your children
+                          <InfoIcon tooltip="For the residence and relationship columns, you must type or print one of the valid options listed. If any of your children do not reside with you, provide the address(es) where those children live in Part 14. Additional Information. If you have more than three children, use the space provided in Part 14. Additional Information." />
+                        </label>
+
+                        {childrenFields.slice(0, Math.min(parseInt(watchedData.total_children || "0"), 10)).map((field, index) => (
+                          <div key={field.id} style={{ marginBottom: "24px", padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                              <h3 style={{ fontSize: "16px", fontWeight: "600" }}>Child {index + 1}</h3>
+                              {index >= parseInt(watchedData.total_children || "0") && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeChild(index)}
+                                  style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
+                            <div className="form-row-equal">
+                              <div className="form-group">
+                                <label className="form-label">Son or Daughter's Name (First Name and Family Name)</label>
+                                <div className="form-row-equal">
+                                  <input type="text" className="form-input" placeholder="First Name" {...register(`children.${index}.first_name`)} />
+                                  <input type="text" className="form-input" placeholder="Last Name" {...register(`children.${index}.last_name`)} />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="form-row-equal">
+                              <div className="form-group">
+                                <label className="form-label">Date of Birth (mm/dd/yyyy)</label>
+                                <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`children.${index}.date_of_birth`)} />
+                              </div>
+                              <div className="form-group">
+                                <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                                  Residence
+                                  <InfoIcon tooltip="Valid options include: resides with me, does not reside with me, or unknown/missing" />
+                                </label>
+                                <select className="form-select" {...register(`children.${index}.residence`)}>
+                                  <option value="">Select...</option>
+                                  <option value="resides with me">Resides with me</option>
+                                  <option value="does not reside with me">Does not reside with me</option>
+                                  <option value="unknown/missing">Unknown/Missing</option>
+                                </select>
+                              </div>
+                              <div className="form-group">
+                                <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                                  Relationship
+                                  <InfoIcon tooltip="Valid options include: biological son or daughter, stepchild, or legally adopted son or daughter" />
+                                </label>
+                                <select className="form-select" {...register(`children.${index}.relationship`)}>
+                                  <option value="">Select...</option>
+                                  <option value="biological son or daughter">Biological son or daughter</option>
+                                  <option value="stepchild">Stepchild</option>
+                                  <option value="legally adopted son or daughter">Legally adopted son or daughter</option>
+                                </select>
+                              </div>
+                            </div>
                           </div>
-                <div className="form-row-equal">
-                  <div className="form-group">
-                              <label className="form-label">Son or Daughter's Name (First Name and Family Name)</label>
-                              <div className="form-row-equal">
-                                <input type="text" className="form-input" placeholder="First Name" {...register(`children.${index}.first_name`)} />
-                                <input type="text" className="form-input" placeholder="Last Name" {...register(`children.${index}.last_name`)} />
-                  </div>
-                  </div>
-                </div>
-                          <div className="form-row-equal">
-                  <div className="form-group">
-                              <label className="form-label">Date of Birth (mm/dd/yyyy)</label>
-                              <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`children.${index}.date_of_birth`)} />
-                  </div>
-                  <div className="form-group">
-                              <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
-                                Residence
-                                <InfoIcon tooltip="Valid options include: resides with me, does not reside with me, or unknown/missing" />
-                              </label>
-                              <select className="form-select" {...register(`children.${index}.residence`)}>
-                      <option value="">Select...</option>
-                                <option value="resides with me">Resides with me</option>
-                                <option value="does not reside with me">Does not reside with me</option>
-                                <option value="unknown/missing">Unknown/Missing</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                              <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
-                                Relationship
-                                <InfoIcon tooltip="Valid options include: biological son or daughter, stepchild, or legally adopted son or daughter" />
-                              </label>
-                              <select className="form-select" {...register(`children.${index}.relationship`)}>
-                                <option value="">Select...</option>
-                                <option value="biological son or daughter">Biological son or daughter</option>
-                                <option value="stepchild">Stepchild</option>
-                                <option value="legally adopted son or daughter">Legally adopted son or daughter</option>
-                              </select>
-                  </div>
-                </div>
-                        </div>
-                      ))}
-                    </div>
-                    
-                    {watchedData.eligibility_basis === "qualified_employment" && (
-                      <div style={{ marginTop: "16px" }}>
-                        <YesNoField 
-                          name="providing_support_for_children" 
+                        ))}
+                      </div>
+
+                      {watchedData.eligibility_basis === "qualified_employment" && (
+                        <YesNoField
+                          name="providing_support_for_children"
                           metaId="providing_support_for_children"
-                          label="Are you providing support for your son or daughter?" 
+                          label="Are you providing support for your son or daughter?"
                           tooltip="Only answer Item Number 8. if you are filing under Part 1., Item Number 1.d., Spouse of U.S. Citizen in Qualified Employment Outside the United States."
                         />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* STEP 10: BACKGROUND QUESTIONS (Part 9) */}
-            {/* Meridian Guidance Pattern: EverCallout + Section Headers */}
-            {/* ═══════════════════════════════════════════════════════════════ */}
-            {currentStep === 10 && (
-              <>
-                {/* Part 9 "EVER" Callout */}
-                <EverCallout />
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>General Eligibility</h3>
-                  <YesNoField name="q_claimed_us_citizen" metaId="q_claimed_us_citizen" label="Have you ever claimed to be a U.S. citizen?" showReviewLater />
-                  <YesNoField name="q_voted_in_us" metaId="q_voted_in_us" label="Have you ever registered to vote or voted in a U.S. election?" showReviewLater />
-                  <YesNoField name="q_failed_to_file_taxes" metaId="q_failed_to_file_taxes" label="Have you ever failed to file a tax return?" showReviewLater />
-                  <YesNoField name="q_nonresident_alien_tax" metaId="q_nonresident_alien_tax" label="Did you call yourself a 'nonresident alien' on a tax return?" showReviewLater />
-                  <YesNoField name="q_owe_taxes" metaId="q_owe_taxes" label="Do you currently owe overdue taxes?" showReviewLater />
-                  
-                  <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
-                  
-                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Affiliations and Associations</h3>
-                  <YesNoField name="q_communist_party" metaId="q_communist_party" label="Have you ever been associated with a Communist or totalitarian party?" showReviewLater />
-                  <YesNoField name="q_advocated_overthrow" metaId="q_advocated_overthrow" label="Have you ever advocated the overthrow of the U.S. government?" showReviewLater />
-                  <YesNoField name="q_terrorist_org" metaId="q_terrorist_org" label="Have you ever been associated with or supported a terrorist organization?" showReviewLater />
-                  
-                  <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
-                  
-                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Violence and Harm</h3>
-                  <YesNoField name="q_used_weapon_explosive" metaId="q_used_weapon_explosive" label="Have you ever used a weapon or explosive to harm someone or damage property?" showReviewLater />
-                  <YesNoField name="q_kidnapping_assassination_hijacking" metaId="q_kidnapping_assassination_hijacking" label="Have you ever engaged in kidnapping, assassination, or hijacking?" showReviewLater />
-                  <YesNoField name="q_threatened_weapon_violence" metaId="q_threatened_weapon_violence" label="Have you ever threatened or planned violence with weapons?" showReviewLater />
-                  <YesNoField name="q_genocide" metaId="q_genocide" label="Have you ever participated in genocide?" showReviewLater />
-                  <YesNoField name="q_torture" metaId="q_torture" label="Have you ever participated in torture?" showReviewLater />
-                  <YesNoField name="q_killing_person" metaId="q_killing_person" label="Have you ever participated in killing or trying to kill someone?" showReviewLater />
-                  <YesNoField name="q_sexual_contact_nonconsent" metaId="q_sexual_contact_nonconsent" label="Have you ever had non-consensual sexual contact?" showReviewLater />
-                  <YesNoField name="q_severely_injuring" metaId="q_severely_injuring" label="Have you ever intentionally and severely injured someone?" showReviewLater />
-                  <YesNoField name="q_religious_persecution" metaId="q_religious_persecution" label="Have you ever prevented someone from practicing their religion?" showReviewLater />
-                  <YesNoField name="q_harm_race_religion" metaId="q_harm_race_religion" label="Have you ever harmed someone because of their race, religion, or political opinion?" showReviewLater />
-                  
-                  <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
-                  
-                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Military and Police Service</h3>
-                  <YesNoField name="q_military_police_service" metaId="q_military_police_service" label="Have you ever served in a military or police unit?" showReviewLater />
-                  <YesNoField name="q_armed_group" metaId="q_armed_group" label="Have you ever been part of an armed group?" showReviewLater />
-                  <YesNoField name="q_detention_facility" metaId="q_detention_facility" label="Have you ever worked in a detention facility?" showReviewLater />
-                  <YesNoField name="q_group_used_weapons" metaId="q_group_used_weapons" label="10.a. Were you ever part of a group that used weapons?" showReviewLater />
-                  {watchedData.q_group_used_weapons === "yes" && (
-                    <>
-                      <YesNoField name="q_used_weapon_against_person" metaId="q_used_weapon_against_person" label="10.b. Did you use a weapon against another person?" tooltip="If you answered 'Yes' to Item Number 10.a., when you were part of this group, or when you helped this group, did you ever use a weapon against another person?" showReviewLater />
-                      <YesNoField name="q_threatened_weapon_use" metaId="q_threatened_weapon_use" label="10.c. Did you threaten to use a weapon against another person?" tooltip="If you answered 'Yes' to Item Number 10.a., when you were part of this group, or when you helped this group, did you ever threaten another person that you would use a weapon against that person?" showReviewLater />
-                    </>
-                  )}
-                  <YesNoField name="q_weapons_training" metaId="q_weapons_training" label="Have you ever received weapons or military training?" showReviewLater />
-                  <YesNoField name="q_sold_provided_weapons" metaId="q_sold_provided_weapons" label="Have you ever sold or provided weapons?" showReviewLater />
-                  <YesNoField name="q_recruited_under_15" metaId="q_recruited_under_15" label="Have you ever recruited someone under 15 for an armed group?" showReviewLater />
-                  <YesNoField name="q_used_under_15_hostilities" metaId="q_used_under_15_hostilities" label="Have you ever used someone under 15 in hostilities?" showReviewLater />
-                  
-                  <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
-                  
-                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Crimes and Offenses</h3>
-                  <YesNoField name="q_committed_crime_not_arrested" metaId="q_committed_crime_not_arrested" label="15.a. Have you ever committed a crime for which you were not arrested?" showReviewLater />
-                  <YesNoField name="q_arrested" metaId="q_arrested" label="15.b. Have you ever been arrested, cited, or detained?" showReviewLater />
-                  
-                  {(watchedData.q_committed_crime_not_arrested === "yes" || watchedData.q_arrested === "yes") && (
-                    <div className="form-group" style={{ marginTop: "16px" }}>
-                      <p className="helper-text" style={{ marginBottom: "12px", fontWeight: "500" }}>
-                        If you answer "Yes" to any part of Item Number 15., complete the table below with each crime or offense even if your records have been sealed, expunged, or otherwise cleared. You must disclose this information even if someone, including a judge, law enforcement officer, or attorney, told you that it is no longer on your record, or told you that you do not have to disclose the information.
-                      </p>
-                      
-                      {crimeFields.length === 0 && (
-                        <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginBottom: "16px" }}>
-                          <button
-                            type="button"
-                            onClick={() => appendCrime({ date_of_crime: "", date_of_conviction: "", crime_description: "", place_of_crime: "", result_disposition: "", sentence: "" })}
-                            className="save-btn"
-                            style={{ padding: "8px 16px", fontSize: "14px" }}
-                          >
-                            + Add Crime or Offense
-                          </button>
-                        </div>
                       )}
-
-                      {crimeFields.length > 0 && (
-                        <div style={{ overflowX: "auto", marginTop: "16px" }}>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
-                            <thead>
-                              <tr style={{ background: "var(--bg)", borderBottom: "2px solid var(--border)" }}>
-                                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date of Crime</th>
-                                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Crime Description</th>
-                                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Place of Crime</th>
-                                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Result/Disposition</th>
-                                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Date of Conviction</th>
-                                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Sentence</th>
-                                <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Action</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {crimeFields.map((field, index) => (
-                                <tr key={field.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                                  <td style={{ padding: "12px" }}>
-                                    <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ width: "100%", fontSize: "14px" }} {...register(`crimes.${index}.date_of_crime`)} />
-                                  </td>
-                                  <td style={{ padding: "12px" }}>
-                                    <input type="text" className="form-input" placeholder="Crime description" style={{ width: "100%", fontSize: "14px" }} {...register(`crimes.${index}.crime_description`)} />
-                                  </td>
-                                  <td style={{ padding: "12px" }}>
-                                    <input type="text" className="form-input" placeholder="City, State, Country" style={{ width: "100%", fontSize: "14px" }} {...register(`crimes.${index}.place_of_crime`)} />
-                                  </td>
-                                  <td style={{ padding: "12px" }}>
-                                    <input type="text" className="form-input" placeholder="Result" style={{ width: "100%", fontSize: "14px" }} {...register(`crimes.${index}.result_disposition`)} />
-                                  </td>
-                                  <td style={{ padding: "12px" }}>
-                                    <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ width: "100%", fontSize: "14px" }} {...register(`crimes.${index}.date_of_conviction`)} />
-                                  </td>
-                                  <td style={{ padding: "12px" }}>
-                                    <input type="text" className="form-input" placeholder="Sentence" style={{ width: "100%", fontSize: "14px" }} {...register(`crimes.${index}.sentence`)} />
-                                  </td>
-                                  <td style={{ padding: "12px", textAlign: "center" }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => removeCrime(index)}
-                                      style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
-                                    >
-                                      <Trash2 size={16} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          <button
-                            type="button"
-                            onClick={() => appendCrime({ date_of_crime: "", date_of_conviction: "", crime_description: "", place_of_crime: "", result_disposition: "", sentence: "" })}
-                            className="save-btn"
-                            style={{ padding: "8px 16px", fontSize: "14px", marginTop: "12px" }}
-                          >
-                            + Add Another Crime or Offense
-                          </button>
-                          <p className="helper-text" style={{ marginTop: "8px", fontSize: "13px" }}>
-                            If you need extra space, use Part 14. Additional Information.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {(watchedData.q_committed_crime_not_arrested === "yes" || watchedData.q_arrested === "yes") && (
-                    <YesNoField name="q_completed_probation" metaId="q_completed_probation" label="16. If you received a suspended sentence, were placed on probation, or were paroled, have you completed your suspended sentence, probation, or parole?" showReviewLater />
-                  )}
-
-                  <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
-
-                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Additional Eligibility Questions</h3>
-                  <YesNoField name="q_prostitution" metaId="q_prostitution" label="Have you ever engaged in prostitution?" showReviewLater />
-                  <YesNoField name="q_controlled_substances" metaId="q_controlled_substances" label="Have you ever sold or trafficked controlled substances?" showReviewLater />
-                  <YesNoField name="q_marriage_fraud" metaId="q_marriage_fraud" label="Have you ever married someone to obtain an immigration benefit?" showReviewLater />
-                  <YesNoField name="q_polygamy" metaId="q_polygamy" label="Have you ever been married to more than one person at the same time?" showReviewLater />
-                  <YesNoField name="q_helped_illegal_entry" metaId="q_helped_illegal_entry" label="Have you ever helped someone enter the U.S. illegally?" showReviewLater />
-                  <YesNoField name="q_illegal_gambling" metaId="q_illegal_gambling" label="Have you ever gambled illegally or received income from illegal gambling?" showReviewLater />
-                  <YesNoField name="q_failed_child_support" metaId="q_failed_child_support" label="Have you ever failed to pay child support or alimony?" showReviewLater />
-                  <YesNoField name="q_misrepresentation_public_benefits" metaId="q_misrepresentation_public_benefits" label="Have you ever misrepresented information to obtain public benefits?" showReviewLater />
-                  <YesNoField name="q_habitual_drunkard" metaId="q_habitual_drunkard" label="Have you ever been a habitual drunkard?" showReviewLater />
-                  
-                  <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
-                  
-                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Immigration Violations</h3>
-                  <YesNoField name="q_false_info_us_government" metaId="q_false_info_us_government" label="Have you ever given false information to U.S. government officials?" showReviewLater />
-                  <YesNoField name="q_lied_us_government" metaId="q_lied_us_government" label="Have you ever lied to U.S. government officials?" showReviewLater />
-                  <YesNoField name="q_removed_deported" metaId="q_removed_deported" label="Have you ever been removed or deported from the U.S.?" showReviewLater />
-                  <YesNoField name="q_removal_proceedings" metaId="q_removal_proceedings" label="Have you ever been placed in removal or deportation proceedings?" showReviewLater />
-                  
-                  <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
-                  
-                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Selective Service</h3>
-                  <YesNoField name="q_male_18_26_lived_us" metaId="q_male_18_26_lived_us" label="Are you a male who lived in the U.S. between ages 18-26?" showReviewLater />
-                  {watchedData.q_male_18_26_lived_us === "yes" && (
-                    <>
-                      <YesNoField name="q_registered_selective_service" metaId="q_registered_selective_service" label="Did you register for the Selective Service?" showReviewLater />
-                      {watchedData.q_registered_selective_service === "yes" && (
-                        <div className="form-row-equal" style={{ marginTop: "10px" }}>
-                <div className="form-group">
-                            <label className="form-label">Selective Service Number</label>
-                            <input type="text" className="form-input" {...register("selective_service_number")} />
-                </div>
-                          <div className="form-group">
-                            <label className="form-label">Date Registered</label>
-                            <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("selective_service_date")} />
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  
-                  <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
-                  
-                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Military Service</h3>
-                  <YesNoField name="q_left_us_avoid_draft" metaId="q_left_us_avoid_draft" label="23. Did you leave the U.S. to avoid being drafted?" showReviewLater />
-                  <YesNoField name="q_applied_military_exemption" metaId="q_applied_military_exemption" label="24. Have you ever applied for a military service exemption?" showReviewLater />
-                  <YesNoField name="q_served_us_military" metaId="q_served_us_military" label="25. Have you ever served in the U.S. armed forces?" showReviewLater />
-                  
-                  {/* Items 26-29 only show if Item 25 is "yes" */}
-                  {watchedData.q_served_us_military === "yes" && (
-                    <>
-                      <YesNoField name="q_current_military_member" metaId="q_current_military_member" label="26.a. Are you currently a member of the U.S. armed forces?" showReviewLater />
-                      {watchedData.q_current_military_member === "yes" && (
-                        <>
-                          <YesNoField name="q_scheduled_deploy" metaId="q_scheduled_deploy" label="26.b. Are you scheduled to deploy outside the U.S. within 3 months?" tooltip="Are you scheduled to deploy outside the United States, including to a vessel, within the next 3 months? (Call the Military Help Line at 877-247-4645 if you transfer to a new duty station after you file your Form N-400, including if you are deployed outside the United States or to a vessel.)" showReviewLater />
-                          <YesNoField name="q_stationed_outside_us" metaId="q_stationed_outside_us" label="26.c. Are you currently stationed outside the U.S.?" showReviewLater />
-                        </>
-                      )}
-                      {watchedData.q_current_military_member === "no" && (
-                        <YesNoField name="q_former_military_outside_us" metaId="q_former_military_outside_us" label="26.d. Are you a former military member living outside the U.S.?" showReviewLater />
-                      )}
-                      <YesNoField name="q_discharged_because_alien" metaId="q_discharged_because_alien" label="27. Were you discharged because you were an alien?" showReviewLater />
-                      <YesNoField name="q_court_martialed" metaId="q_court_martialed" label="28. Were you court-martialed or received a dishonorable discharge?" showReviewLater />
-                      <YesNoField name="q_deserted_military" metaId="q_deserted_military" label="29. Have you ever deserted from the U.S. armed forces?" showReviewLater />
-                    </>
-                  )}
-                  
-                  <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
-                  
-                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Title of Nobility</h3>
-                  <YesNoField name="q_title_of_nobility" metaId="q_title_of_nobility" label="30.a. Do you have or have you ever had a hereditary title or order of nobility?" showReviewLater />
-                  {watchedData.q_title_of_nobility === "yes" && (
-                    <>
-                      <YesNoField name="q_willing_to_give_up_titles" metaId="q_willing_to_give_up_titles" label="30.b. Are you willing to give up your titles at your naturalization ceremony?" tooltip="If you answered 'Yes' to Item Number 30.a., are you willing to give up any inherited titles or orders of nobility, that you have in a foreign country at your naturalization ceremony?" showReviewLater />
-                      {/* USCIS requires listing titles regardless of willingness to give them up */}
-                      <div className="form-group" style={{ marginTop: "10px" }}>
-                        <label className="form-label">List all titles and orders of nobility:</label>
-                        <textarea className="form-input" rows={3} placeholder="List each title on a separate line" {...register("q_titles_list")} />
-                        <p className="helper-text" style={{ fontSize: "13px", marginTop: "4px" }}>
-                          You must list all titles and orders of nobility, regardless of whether you are willing to give them up.
-                    </p>
-                  </div>
-                    </>
-                  )}
-                  
-                  <hr style={{ border: "none", borderTop: "1px solid var(--light-gray)", margin: "16px 0" }} />
-                  
-                  <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>Oath of Allegiance</h3>
-                  <YesNoField name="q_support_constitution" metaId="q_support_constitution" label="31. Do you support the U.S. Constitution and form of government?" showReviewLater />
-                  <YesNoField name="q_understand_oath" metaId="q_understand_oath" label="32. Do you understand the full Oath of Allegiance?" showReviewLater />
-                  <YesNoField name="q_unable_oath_disability" metaId="q_unable_oath_disability" label="33. Are you unable to take the Oath due to a disability?" showReviewLater />
-                  {watchedData.q_unable_oath_disability === "no" && (
-                    <>
-                      <YesNoField name="q_willing_take_oath" metaId="q_willing_take_oath" label="34. Are you willing to take the full Oath of Allegiance?" showReviewLater />
-                      <YesNoField name="q_willing_bear_arms" metaId="q_willing_bear_arms" label="35. Are you willing to bear arms if required by law?" showReviewLater />
-                      <YesNoField name="q_willing_noncombatant" metaId="q_willing_noncombatant" label="36. Are you willing to perform noncombatant services if required?" showReviewLater />
-                      <YesNoField name="q_willing_work_national_importance" metaId="q_willing_work_national_importance" label="37. Are you willing to perform work of national importance if required?" showReviewLater />
-                      <p className="helper-text" style={{ marginTop: "-10px", fontSize: "13px" }}>
-                        If you answer "No" to any question except Item Number 33., see the Oath of Allegiance section of the Instructions for more information.
-                      </p>
                     </>
                   )}
                 </div>
               </>
             )}
+
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {/* STEP 10: BACKGROUND QUESTIONS (Part 9) - Single Question Screen */}
+            {/* ═══════════════════════════════════════════════════════════════ */}
+            {currentStep === 10 && <SingleQuestionScreen />}
 
             {/* ═══════════════════════════════════════════════════════════════ */}
             {/* STEP 11: FEE REDUCTION (Part 10) */}
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 11 && (
               <>
-                <p className="helper-text" style={{ marginBottom: "24px" }}>
-                  For information about fees, fee waivers, and reduced fees, see Form G-1055, Fee Schedule, at www.uscis.gov/g-1055. To request a reduced fee, complete Item Numbers 1. - 5.b. If you are not requesting a reduced fee, complete Item Number 1. and proceed to Part 11.
-                </p>
+                {/* Card: Fee Reduction Request */}
+                <div className="question-card">
+                  <div className="question-card-title">Fee Reduction Request</div>
 
-                <YesNoField 
-                  name="fee_reduction_requested" 
-                  metaId="fee_reduction_requested"
-                  label="1. Are you requesting a reduced fee?" 
-                  tooltip="My household income is less than or equal to 400% of the Federal Poverty Guidelines (see Instructions for required documentation)."
-                />
-                
-                {watchedData.fee_reduction_requested === "yes" && (
-                  <>
-                    <div className="form-group" style={{ marginTop: "16px" }}>
-                      <label className="form-label">2. {labelFor("household_income", "Total household income")}</label>
-                      {renderQuestionGuidance("household_income")}
-                      <input type="text" className="form-input" placeholder="$0.00" style={{ maxWidth: "200px" }} {...register("household_income")} />
-                    </div>
+                  <p className="helper-text" style={{ marginBottom: "24px" }}>
+                    For information about fees, fee waivers, and reduced fees, see Form G-1055, Fee Schedule, at www.uscis.gov/g-1055. To request a reduced fee, complete Item Numbers 1. - 5.b. If you are not requesting a reduced fee, complete Item Number 1. and proceed to Part 11.
+                  </p>
 
-                <div className="form-group">
-                      <label className="form-label">3. {labelFor("household_size", "My household size is")}</label>
-                      {renderQuestionGuidance("household_size")}
-                      <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("household_size")} />
+                  <YesNoField
+                    name="fee_reduction_requested"
+                    metaId="fee_reduction_requested"
+                    label="1. Are you requesting a reduced fee?"
+                    tooltip="My household income is less than or equal to 400% of the Federal Poverty Guidelines (see Instructions for required documentation)."
+                  />
+
+                  {watchedData.fee_reduction_requested === "yes" && (
+                    <>
+                      <div className="form-group" style={{ marginTop: "16px" }}>
+                        <label className="form-label">2. {labelFor("household_income", "Total household income")}</label>
+                        {renderQuestionGuidance("household_income")}
+                        <input type="text" className="form-input" placeholder="$0.00" style={{ maxWidth: "200px" }} {...register("household_income")} />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">3. {labelFor("household_size", "My household size is")}</label>
+                        {renderQuestionGuidance("household_size")}
+                        <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("household_size")} />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">4. {labelFor("household_income_earners", "Total number of household members earning income including yourself")}</label>
+                        {renderQuestionGuidance("household_income_earners")}
+                        <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("household_income_earners")} />
+                      </div>
+
+                      <YesNoField name="is_head_of_household" metaId="is_head_of_household" label="5.a. Are you the head of household?" />
+
+                      {watchedData.is_head_of_household === "no" && (
+                        <div className="form-group" style={{ marginTop: "10px" }}>
+                          <label className="form-label">5.b. {labelFor("head_of_household_name", "Name of head of household")}</label>
+                          {renderQuestionGuidance("head_of_household_name")}
+                          <input type="text" className="form-input" placeholder="Full name" {...register("head_of_household_name")} />
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {watchedData.fee_reduction_requested === "no" && (
+                    <p className="helper-text" style={{ marginTop: "-10px" }}>(Skip to Part 11.)</p>
+                  )}
                 </div>
-
-                  <div className="form-group">
-                      <label className="form-label">4. {labelFor("household_income_earners", "Total number of household members earning income including yourself")}</label>
-                      {renderQuestionGuidance("household_income_earners")}
-                      <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("household_income_earners")} />
-                    </div>
-
-                    <YesNoField name="is_head_of_household" metaId="is_head_of_household" label="5.a. Are you the head of household?" />
-                    
-                    {watchedData.is_head_of_household === "no" && (
-                      <div className="form-group" style={{ marginTop: "10px" }}>
-                        <label className="form-label">5.b. {labelFor("head_of_household_name", "Name of head of household")}</label>
-                        {renderQuestionGuidance("head_of_household_name")}
-                        <input type="text" className="form-input" placeholder="Full name" {...register("head_of_household_name")} />
-                  </div>
-                    )}
-                  </>
-                )}
-
-                {watchedData.fee_reduction_requested === "no" && (
-                  <p className="helper-text" style={{ marginTop: "-10px" }}>(Skip to Part 11.)</p>
-                )}
               </>
             )}
 
@@ -3395,38 +3462,48 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 12 && (
               <>
-                      <div className="form-group">
-                  <label className="form-label">1. {labelFor("daytime_phone", "Applicant's Daytime Telephone Number")}</label>
-                  <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("daytime_phone")} />
-                  {errors.daytime_phone && <p className="error-message">{errors.daytime_phone.message}</p>}
-                      </div>
+                {/* Card: Applicant Contact */}
+                <div className="question-card">
+                  <div className="question-card-title">Applicant Contact</div>
 
-                      <div className="form-group">
-                  <label className="form-label">2. {labelFor("mobile_phone", "Applicant's Mobile Telephone Number (if any)")}</label>
-                  <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("mobile_phone")} />
-                      </div>
+                  <div className="form-group">
+                    <label className="form-label">1. {labelFor("daytime_phone", "Applicant's Daytime Telephone Number")}</label>
+                    <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("daytime_phone")} />
+                    {errors.daytime_phone && <p className="error-message">{errors.daytime_phone.message}</p>}
+                  </div>
 
-                      <div className="form-group">
-                  <label className="form-label">3. {labelFor("email", "Applicant's Email Address (if any)")}</label>
-                  <input type="email" className="form-input" placeholder="you@example.com" {...register("email")} />
-                  {errors.email && <p className="error-message">{errors.email.message}</p>}
-                    </div>
+                  <div className="form-group">
+                    <label className="form-label">2. {labelFor("mobile_phone", "Applicant's Mobile Telephone Number (if any)")}</label>
+                    <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("mobile_phone")} />
+                  </div>
 
-                <div className="form-group" style={{ marginTop: "32px" }}>
-                  <label className="form-label">4. Applicant's Certification and Signature</label>
-                  <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
-                    <p style={{ fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" }}>
-                      I certify, under penalty of perjury, that I provided or authorized all of the responses and information contained in and submitted with my application, I read and understand or, if interpreted to me in a language in which I am fluent by the interpreter listed in Part 12., understood, all of the responses and information contained in, and submitted with, my application, and that all of the responses and the information are complete, true, and correct. Furthermore, I authorize the release of any information from any and all of my records that USCIS may need to determine my eligibility for an immigration request and to other entities and persons where necessary for the administration and enforcement of U.S. immigration law.
-                    </p>
-                    <div className="form-row-equal">
-                      <div className="form-group">
-                        <label className="form-label">Applicant's Signature (or signature of a legal guardian, surrogate, or designated representative, if applicable)</label>
-                        <input type="text" className="form-input" placeholder="Type your full name" {...register("applicant_signature")} />
-                        <p className="helper-text" style={{ fontSize: "12px", marginTop: "4px" }}>By typing your name, you are signing this form electronically</p>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Date of Signature (mm/dd/yyyy)</label>
-                        <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("signature_date")} />
+                  <div className="form-group">
+                    <label className="form-label">3. {labelFor("email", "Applicant's Email Address (if any)")}</label>
+                    <input type="email" className="form-input" placeholder="you@example.com" {...register("email")} />
+                    {errors.email && <p className="error-message">{errors.email.message}</p>}
+                  </div>
+                </div>
+
+                {/* Card: Certification & Signature */}
+                <div className="question-card">
+                  <div className="question-card-title">Certification & Signature</div>
+
+                  <div className="form-group">
+                    <label className="form-label">4. Applicant's Certification and Signature</label>
+                    <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
+                      <p style={{ fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" }}>
+                        I certify, under penalty of perjury, that I provided or authorized all of the responses and information contained in and submitted with my application, I read and understand or, if interpreted to me in a language in which I am fluent by the interpreter listed in Part 12., understood, all of the responses and information contained in, and submitted with, my application, and that all of the responses and the information are complete, true, and correct. Furthermore, I authorize the release of any information from any and all of my records that USCIS may need to determine my eligibility for an immigration request and to other entities and persons where necessary for the administration and enforcement of U.S. immigration law.
+                      </p>
+                      <div className="form-row-equal">
+                        <div className="form-group">
+                          <label className="form-label">Applicant's Signature (or signature of a legal guardian, surrogate, or designated representative, if applicable)</label>
+                          <input type="text" className="form-input" placeholder="Type your full name" {...register("applicant_signature")} />
+                          <p className="helper-text" style={{ fontSize: "12px", marginTop: "4px" }}>By typing your name, you are signing this form electronically</p>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Date of Signature (mm/dd/yyyy)</label>
+                          <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("signature_date")} />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -3439,81 +3516,86 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 13 && (
               <>
-                <YesNoField name="used_interpreter" metaId="used_interpreter" label="Did you use an interpreter to complete this application?" />
-                
-                {watchedData.used_interpreter === "yes" && (
-                  <>
-                    <div className="form-group" style={{ marginTop: "20px" }}>
-                      <label className="form-label">Interpreter's Full Name</label>
-                    <div className="form-row-equal">
-                        <div>
-                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("interpreter_last_name", "Interpreter's Family Name (Last Name)")}</label>
-                          <input type="text" className="form-input" {...register("interpreter_last_name")} />
-                        </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("interpreter_first_name", "Interpreter's Given Name (First Name)")}</label>
-                          <input type="text" className="form-input" {...register("interpreter_first_name")} />
-                        </div>
-                      </div>
-                    </div>
+                {/* Card: Interpreter Information */}
+                <div className="question-card">
+                  <div className="question-card-title">Interpreter Information</div>
 
-                      <div className="form-group">
-                      <label className="form-label">2. {labelFor("interpreter_business_name", "Interpreter's Business or Organization Name")}</label>
-                      {renderQuestionGuidance("interpreter_business_name")}
-                      <input type="text" className="form-input" {...register("interpreter_business_name")} />
-                      </div>
+                  <YesNoField name="used_interpreter" metaId="used_interpreter" label="Did you use an interpreter to complete this application?" />
 
-                    <div className="form-row-equal">
-                      <div className="form-group">
-                        <label className="form-label">3. {labelFor("interpreter_phone", "Interpreter's Daytime Telephone Number")}</label>
-                        {renderQuestionGuidance("interpreter_phone")}
-                        <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("interpreter_phone")} />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">4. {labelFor("interpreter_mobile", "Interpreter's Mobile Telephone Number (if any)")}</label>
-                        {renderQuestionGuidance("interpreter_mobile")}
-                        <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("interpreter_mobile")} />
-                      </div>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">5. {labelFor("interpreter_email", "Interpreter's Email Address (if any)")}</label>
-                      {renderQuestionGuidance("interpreter_email")}
-                      <input type="email" className="form-input" placeholder="interpreter@example.com" {...register("interpreter_email")} />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">{labelFor("interpreter_language", "Language in which interpreter is fluent")}</label>
-                      {renderQuestionGuidance("interpreter_language")}
-                      <input type="text" className="form-input" placeholder="e.g., Spanish, Chinese, etc." {...register("interpreter_language")} />
-                    </div>
-
-                    <div className="form-group" style={{ marginTop: "24px" }}>
-                      <label className="form-label">Interpreter's Certification and Signature</label>
-                      <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
-                        <p style={{ fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" }}>
-                          I certify, under penalty of perjury, that I am fluent in English and [language] and I have interpreted every question on the application and Instructions and interpreted the applicant's answers to the questions in that language, and the applicant informed me that he or she understood every instruction, question, and answer on the application.
-                        </p>
+                  {watchedData.used_interpreter === "yes" && (
+                    <>
+                      <div className="form-group" style={{ marginTop: "20px" }}>
+                        <label className="form-label">Interpreter's Full Name</label>
                         <div className="form-row-equal">
-                          <div className="form-group">
-                            <label className="form-label">{labelFor("interpreter_signature", "Interpreter's Signature")}</label>
-                            {renderQuestionGuidance("interpreter_signature")}
-                            <input type="text" className="form-input" placeholder="Type interpreter's full name" {...register("interpreter_signature")} />
-                  </div>
-                          <div className="form-group">
-                            <label className="form-label">{labelFor("interpreter_signature_date", "Date of Signature (mm/dd/yyyy)")}</label>
-                            {renderQuestionGuidance("interpreter_signature_date")}
-                            <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("interpreter_signature_date")} />
+                          <div>
+                            <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("interpreter_last_name", "Interpreter's Family Name (Last Name)")}</label>
+                            <input type="text" className="form-input" {...register("interpreter_last_name")} />
+                          </div>
+                          <div>
+                            <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("interpreter_first_name", "Interpreter's Given Name (First Name)")}</label>
+                            <input type="text" className="form-input" {...register("interpreter_first_name")} />
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </>
-                )}
 
-                {watchedData.used_interpreter === "no" && (
-                  <p className="helper-text" style={{ marginTop: "-10px" }}>(Skip to Part 13 if someone else prepared this application, otherwise skip to Part 14.)</p>
-                )}
+                      <div className="form-group">
+                        <label className="form-label">2. {labelFor("interpreter_business_name", "Interpreter's Business or Organization Name")}</label>
+                        {renderQuestionGuidance("interpreter_business_name")}
+                        <input type="text" className="form-input" {...register("interpreter_business_name")} />
+                      </div>
+
+                      <div className="form-row-equal">
+                        <div className="form-group">
+                          <label className="form-label">3. {labelFor("interpreter_phone", "Interpreter's Daytime Telephone Number")}</label>
+                          {renderQuestionGuidance("interpreter_phone")}
+                          <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("interpreter_phone")} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">4. {labelFor("interpreter_mobile", "Interpreter's Mobile Telephone Number (if any)")}</label>
+                          {renderQuestionGuidance("interpreter_mobile")}
+                          <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("interpreter_mobile")} />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">5. {labelFor("interpreter_email", "Interpreter's Email Address (if any)")}</label>
+                        {renderQuestionGuidance("interpreter_email")}
+                        <input type="email" className="form-input" placeholder="interpreter@example.com" {...register("interpreter_email")} />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">{labelFor("interpreter_language", "Language in which interpreter is fluent")}</label>
+                        {renderQuestionGuidance("interpreter_language")}
+                        <input type="text" className="form-input" placeholder="e.g., Spanish, Chinese, etc." {...register("interpreter_language")} />
+                      </div>
+
+                      <div className="form-group" style={{ marginTop: "24px" }}>
+                        <label className="form-label">Interpreter's Certification and Signature</label>
+                        <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
+                          <p style={{ fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" }}>
+                            I certify, under penalty of perjury, that I am fluent in English and [language] and I have interpreted every question on the application and Instructions and interpreted the applicant's answers to the questions in that language, and the applicant informed me that he or she understood every instruction, question, and answer on the application.
+                          </p>
+                          <div className="form-row-equal">
+                            <div className="form-group">
+                              <label className="form-label">{labelFor("interpreter_signature", "Interpreter's Signature")}</label>
+                              {renderQuestionGuidance("interpreter_signature")}
+                              <input type="text" className="form-input" placeholder="Type interpreter's full name" {...register("interpreter_signature")} />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">{labelFor("interpreter_signature_date", "Date of Signature (mm/dd/yyyy)")}</label>
+                              {renderQuestionGuidance("interpreter_signature_date")}
+                              <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("interpreter_signature_date")} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {watchedData.used_interpreter === "no" && (
+                    <p className="helper-text" style={{ marginTop: "-10px" }}>(Skip to Part 13 if someone else prepared this application, otherwise skip to Part 14.)</p>
+                  )}
+                </div>
               </>
             )}
 
@@ -3522,75 +3604,80 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 14 && (
               <>
-                <YesNoField name="used_preparer" metaId="used_preparer" label="Did someone other than you prepare this application?" />
-                
-                {watchedData.used_preparer === "yes" && (
-                  <>
-                    <div className="form-group" style={{ marginTop: "20px" }}>
-                      <label className="form-label">Preparer's Full Name</label>
-                      <div className="form-row-equal">
-                        <div>
-                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("preparer_last_name", "Preparer's Family Name (Last Name)")}</label>
-                          <input type="text" className="form-input" {...register("preparer_last_name")} />
-                        </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("preparer_first_name", "Preparer's Given Name (First Name)")}</label>
-                          <input type="text" className="form-input" {...register("preparer_first_name")} />
-                        </div>
-                      </div>
-                    </div>
+                {/* Card: Preparer Information */}
+                <div className="question-card">
+                  <div className="question-card-title">Preparer Information</div>
 
-                <div className="form-group">
-                      <label className="form-label">2. {labelFor("preparer_business_name", "Preparer's Business or Organization Name")}</label>
-                      {renderQuestionGuidance("preparer_business_name")}
-                      <input type="text" className="form-input" {...register("preparer_business_name")} />
-                </div>
+                  <YesNoField name="used_preparer" metaId="used_preparer" label="Did someone other than you prepare this application?" />
 
-                    <div className="form-row-equal">
-                      <div className="form-group">
-                        <label className="form-label">3. {labelFor("preparer_phone", "Preparer's Daytime Telephone Number")}</label>
-                        {renderQuestionGuidance("preparer_phone")}
-                        <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("preparer_phone")} />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">4. {labelFor("preparer_mobile", "Preparer's Mobile Telephone Number (if any)")}</label>
-                        {renderQuestionGuidance("preparer_mobile")}
-                        <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("preparer_mobile")} />
-                      </div>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">5. {labelFor("preparer_email", "Preparer's Email Address (if any)")}</label>
-                      {renderQuestionGuidance("preparer_email")}
-                      <input type="email" className="form-input" placeholder="preparer@example.com" {...register("preparer_email")} />
-                    </div>
-
-                    <div className="form-group" style={{ marginTop: "24px" }}>
-                      <label className="form-label">Preparer's Certification and Signature</label>
-                      <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
-                        <p style={{ fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" }}>
-                          I certify, under penalty of perjury, that I prepared this application for the applicant at his or her request and with express consent and that all of the responses and information contained in and submitted with the application are complete, true, and correct and reflects only information provided by the applicant. The applicant reviewed the responses and information and informed me that he or she understands the responses and information in or submitted with the application.
-                        </p>
+                  {watchedData.used_preparer === "yes" && (
+                    <>
+                      <div className="form-group" style={{ marginTop: "20px" }}>
+                        <label className="form-label">Preparer's Full Name</label>
                         <div className="form-row-equal">
-                          <div className="form-group">
-                            <label className="form-label">{labelFor("preparer_signature", "Preparer's Signature")}</label>
-                            {renderQuestionGuidance("preparer_signature")}
-                            <input type="text" className="form-input" placeholder="Type preparer's full name" {...register("preparer_signature")} />
-                  </div>
-                          <div className="form-group">
-                            <label className="form-label">{labelFor("preparer_signature_date", "Date of Signature (mm/dd/yyyy)")}</label>
-                            {renderQuestionGuidance("preparer_signature_date")}
-                            <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("preparer_signature_date")} />
+                          <div>
+                            <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("preparer_last_name", "Preparer's Family Name (Last Name)")}</label>
+                            <input type="text" className="form-input" {...register("preparer_last_name")} />
+                          </div>
+                          <div>
+                            <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("preparer_first_name", "Preparer's Given Name (First Name)")}</label>
+                            <input type="text" className="form-input" {...register("preparer_first_name")} />
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </>
-                )}
 
-                {watchedData.used_preparer === "no" && (
-                  <p className="helper-text" style={{ marginTop: "-10px" }}>(Skip to Part 14.)</p>
-                )}
+                      <div className="form-group">
+                        <label className="form-label">2. {labelFor("preparer_business_name", "Preparer's Business or Organization Name")}</label>
+                        {renderQuestionGuidance("preparer_business_name")}
+                        <input type="text" className="form-input" {...register("preparer_business_name")} />
+                      </div>
+
+                      <div className="form-row-equal">
+                        <div className="form-group">
+                          <label className="form-label">3. {labelFor("preparer_phone", "Preparer's Daytime Telephone Number")}</label>
+                          {renderQuestionGuidance("preparer_phone")}
+                          <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("preparer_phone")} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">4. {labelFor("preparer_mobile", "Preparer's Mobile Telephone Number (if any)")}</label>
+                          {renderQuestionGuidance("preparer_mobile")}
+                          <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("preparer_mobile")} />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">5. {labelFor("preparer_email", "Preparer's Email Address (if any)")}</label>
+                        {renderQuestionGuidance("preparer_email")}
+                        <input type="email" className="form-input" placeholder="preparer@example.com" {...register("preparer_email")} />
+                      </div>
+
+                      <div className="form-group" style={{ marginTop: "24px" }}>
+                        <label className="form-label">Preparer's Certification and Signature</label>
+                        <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
+                          <p style={{ fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" }}>
+                            I certify, under penalty of perjury, that I prepared this application for the applicant at his or her request and with express consent and that all of the responses and information contained in and submitted with the application are complete, true, and correct and reflects only information provided by the applicant. The applicant reviewed the responses and information and informed me that he or she understands the responses and information in or submitted with the application.
+                          </p>
+                          <div className="form-row-equal">
+                            <div className="form-group">
+                              <label className="form-label">{labelFor("preparer_signature", "Preparer's Signature")}</label>
+                              {renderQuestionGuidance("preparer_signature")}
+                              <input type="text" className="form-input" placeholder="Type preparer's full name" {...register("preparer_signature")} />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label">{labelFor("preparer_signature_date", "Date of Signature (mm/dd/yyyy)")}</label>
+                              {renderQuestionGuidance("preparer_signature_date")}
+                              <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("preparer_signature_date")} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {watchedData.used_preparer === "no" && (
+                    <p className="helper-text" style={{ marginTop: "-10px" }}>(Skip to Part 14.)</p>
+                  )}
+                </div>
               </>
             )}
 
@@ -3599,18 +3686,16 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 15 && (
               <>
-                <p className="helper-text" style={{ marginBottom: "24px" }}>
-                  If you need extra space to provide any additional information within this application, use the space below. If you need more space than what is provided, you may make copies of this page to complete and file with this application or attach a separate sheet of paper. Type or print your name and A-Number at the top of each sheet; indicate the Page Number, Part Number, and Item Number to which your answer refers; and sign and date each sheet.
-                </p>
+                {/* Card: Additional Information */}
+                <div className="question-card">
+                  <div className="question-card-title">Additional Information</div>
 
-                <div className="form-group">
-                  <label className="form-label">Additional Information</label>
-                  <p className="helper-text" style={{ marginBottom: "12px" }}>
-                    Use this section to provide explanations for any "Yes" answers in Part 9, or to provide any additional information requested throughout the form.
+                  <p className="helper-text" style={{ marginBottom: "24px" }}>
+                    If you need extra space to provide any additional information within this application, use the space below. Use this section to provide explanations for any "Yes" answers in Part 9, or to provide any additional information requested throughout the form.
                   </p>
-                  
+
                   {/* Additional information array */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                     {additionalFields.length === 0 && (
                       <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
                         <p style={{ fontSize: "14px", color: "var(--gray)", marginBottom: "12px" }}>No additional information entries yet. Click "Add Entry" to begin.</p>

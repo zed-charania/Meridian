@@ -97,121 +97,25 @@ This document lists all fields from the official N-400 form (Edition 01/20/25) t
 
 ## Part 9: Additional Information About You
 
-### Missing Questions (Items 1-37):
-1. **Item 4** - Tax return questions (partially implemented)
-   - `q_failed_to_file_taxes` - ✅ Exists
-   - `q_owe_taxes` - ✅ Exists
-   - Missing: "Since you became a lawful permanent resident, have you called yourself a 'nonresident alien' on a Federal, state, or local tax return or decided not to file a tax return because you considered yourself to be a nonresident?"
+### ✅ ALL 46 QUESTIONS IMPLEMENTED
 
-2. **Item 5.a** - Communist/totalitarian party membership
-   - `q_communist_party` - ✅ Exists but needs to match exact wording
+All Part 9 (Background Questions) are now fully implemented with:
+- Single-question-per-screen design
+- Question metadata with plain English titles, USCIS wording, intent, and guardrails
+- Conditional fields (crime table, selective service details, titles list)
+- PDF field mappings for all questions
 
-3. **Item 5.b** - Advocacy questions
-   - Missing: Questions about advocating overthrow of government, world communism, totalitarian dictatorship, etc.
-
-4. **Item 6.a-6.c** - Weapon/explosive use, kidnapping, assassination, hijacking, threats
-   - Missing: All three sub-items
-
-5. **Item 7.a-7.g** - Torture, genocide, killing, sexual contact, injury, religious persecution
-   - `q_genocide` - ✅ Exists
-   - `q_torture` - ✅ Exists
-   - Missing: 7.c (killing), 7.d (sexual contact), 7.e (injury), 7.f (religious persecution), 7.g (harm based on race/religion)
-
-6. **Item 8.a-8.b** - Military/police service, armed groups
-   - Missing: Both questions
-
-7. **Item 9** - Worked in detention facilities
-   - Missing
-
-8. **Item 10.a-10.c** - Groups using weapons
-   - Missing: All three sub-items
-
-9. **Item 11** - Weapons training
-   - Missing
-
-10. **Item 12** - Sold/provided/transported weapons
-    - Missing
-
-11. **Item 13** - Recruited/enlisted person under 15 for armed group
-    - Missing
-
-12. **Item 14** - Used person under 15 in hostilities
-    - Missing
-
-13. **Item 15.a-15.b** - Crimes and offenses (detailed table)
-    - `q_arrested` - ✅ Exists but needs expansion
-    - Missing: Detailed crime table with: date of crime, date of conviction, crime description, place, result/disposition, sentence
-    - Missing: "Have you EVER committed, agreed to commit, asked someone else to commit, helped commit, or tried to commit a crime or offense for which you were NOT arrested?"
-
-14. **Item 16** - Completed suspended sentence/probation/parole
-    - Missing
-
-15. **Item 17.a-17.h** - Various moral character questions
-    - `q_prostitution` - ✅ Exists (17.a)
-    - `q_illegal_gambling` - ✅ Exists (17.f)
-    - `q_failed_child_support` - ✅ Exists (17.g)
-    - Missing: 17.b (controlled substances), 17.c (marriage fraud), 17.d (polygamy), 17.e (helped illegal entry), 17.h (misrepresentation for public benefits)
-
-16. **Item 18** - False/fraudulent information to U.S. Government
-    - Missing
-
-17. **Item 19** - Lied to U.S. Government officials
-    - Missing
-
-18. **Item 20** - Removed/deported from United States
-    - Missing
-
-19. **Item 21** - Placed in removal/rescission/deportation proceedings
-    - Missing
-
-20. **Item 22.a-22.c** - Selective Service Registration
-    - Missing: All three items (male 18-26, registration status, registration number and date)
-
-21. **Item 23** - Left U.S. to avoid draft
-    - Missing
-
-22. **Item 24** - Applied for military service exemption
-    - Missing
-
-23. **Item 25** - Served in U.S. armed forces
-    - `q_served_us_military` - ✅ Exists
-
-24. **Item 26.a-26.d** - Current/former military service details
-    - Missing: All four sub-items (current member, scheduled to deploy, stationed outside U.S., former member residing outside U.S.)
-
-25. **Item 27** - Discharged from training/service because alien
-    - Missing
-
-26. **Item 28** - Court-martialed or dishonorable discharge
-    - Missing
-
-27. **Item 29** - Deserted from U.S. armed forces
-    - `q_deserted_military` - ✅ Exists
-
-28. **Item 30.a-30.b** - Title of nobility
-    - `q_title_of_nobility` - ✅ Exists (30.a)
-    - Missing: 30.b (willing to give up titles)
-
-29. **Item 31** - Support Constitution and form of Government
-    - Missing
-
-30. **Item 32** - Understand full Oath of Allegiance
-    - Missing
-
-31. **Item 33** - Unable to take Oath due to disability
-    - Missing
-
-32. **Item 34** - Willing to take full Oath of Allegiance
-    - Missing
-
-33. **Item 35** - Willing to bear arms
-    - Missing
-
-34. **Item 36** - Willing to perform noncombatant services
-    - Missing
-
-35. **Item 37** - Willing to perform work of national importance
-    - Missing
+**Implemented Questions:**
+- Items 1-4: Tax and citizenship claims
+- Item 5: Communist/totalitarian affiliations
+- Items 6-14: Weapons, violence, persecution, armed groups
+- Items 15-16: Crime history with detailed table
+- Items 17: Moral character questions (prostitution, gambling, drugs, etc.)
+- Items 18-21: Immigration violations
+- Items 22-24: Selective Service registration
+- Items 25-29: Military service history
+- Items 30: Titles of nobility
+- Items 31-37: Oath of Allegiance questions
 
 ## Part 10: Request for a Fee Reduction
 
@@ -276,19 +180,23 @@ This document lists all fields from the official N-400 form (Edition 01/20/25) t
 
 ## Summary Statistics
 
-- **Part 1**: 3 missing fields/options
-- **Part 2**: 6 missing fields
-- **Part 4**: 5+ missing fields (address arrays)
-- **Part 5**: 4 missing fields
-- **Part 6**: 2+ missing fields (children array)
-- **Part 7**: 1+ missing fields (employment array)
-- **Part 8**: 1+ missing fields (trips array)
-- **Part 9**: ~50+ missing questions
-- **Part 10**: Entire section missing (6 fields)
-- **Part 11**: 2 missing fields (signature)
-- **Part 12**: Entire section missing (9 fields)
-- **Part 13**: Entire section missing (8 fields)
-- **Part 14**: Missing (free text field)
+- **Part 1**: ✅ Complete (all eligibility options implemented)
+- **Part 2**: ✅ Complete (name, personal info, SSA fields)
+- **Part 3**: Partial (disability accommodations need expansion)
+- **Part 4**: ✅ Complete (address, mailing address)
+- **Part 5**: ❌ Missing (parent information - 16 fields)
+- **Part 6**: ✅ Complete (marital history, spouse info)
+- **Part 7**: ✅ Complete (children array)
+- **Part 8**: ✅ Complete (employment history array)
+- **Part 9**: ✅ Complete (travel history array)
+- **Part 10 (Background - now Part 9 in form)**: ✅ COMPLETE - All 46 questions with PDF mappings
+- **Part 11 (Fee Reduction)**: ✅ Complete (6 fields)
+- **Part 12 (Signature)**: ✅ Complete (signature, date)
+- **Part 13 (Interpreter)**: ✅ Complete (9 fields)
+- **Part 14 (Preparer)**: ✅ Complete (8 fields)
+- **Part 15 (Additional Info)**: ✅ Complete (free text array)
 
-**Total**: Approximately **90+ missing fields** across all parts of the form.
+**Remaining Gaps**:
+- Part 3 disability accommodations details
+- Part 5 parent information (optional for most filers)
 

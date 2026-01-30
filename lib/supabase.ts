@@ -165,6 +165,7 @@ export interface N400FormData {
   q_owe_taxes?: string;
   q_title_of_nobility?: string;
   q_willing_to_give_up_titles?: string;
+  q_titles_list?: string;
 
   // Affiliations
   q_communist_party?: string;

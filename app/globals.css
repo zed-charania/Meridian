@@ -54,10 +54,10 @@ body {
 }
 
 .save-btn {
-  padding: 8px 20px;
+  padding: 10px 20px;
   background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid var(--light-gray);
+  border-radius: 50px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -65,11 +65,12 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--dark);
+  color: var(--gray);
 }
 
 .save-btn:hover {
-  background: var(--bg);
+  border-color: var(--dark);
+  color: var(--dark);
 }
 
 /* Container */
@@ -86,15 +87,15 @@ body {
   position: relative;
 }
 
-/* Form Card */
+/* Form Card - Clean minimal design with more breathing room */
 .form-card {
   background: var(--white);
-  border-radius: 16px;
-  padding: 64px 80px 80px;
-  max-width: 810px;
+  border-radius: 20px;
+  padding: 56px 72px 64px;
+  max-width: 680px;
   width: 100%;
   border: 1px solid rgba(17, 24, 39, 0.06);
-  box-shadow: 0 18px 45px rgba(17, 24, 39, 0.08);
+  box-shadow: 0 8px 30px rgba(17, 24, 39, 0.06);
   transition: opacity 0.3s ease, transform 0.3s ease;
   margin: 0 auto;
   position: relative;
@@ -102,9 +103,10 @@ body {
 
 @media (max-width: 768px) {
   .form-card {
-    padding: 48px 32px 64px;
+    padding: 36px 24px 44px;
+    border-radius: 16px;
   }
-  
+
   .header {
     padding: 16px 20px;
   }
@@ -113,20 +115,21 @@ body {
 /* Section Label */
 .section-label {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
   color: var(--gray);
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
-/* Headings */
+/* Headings - Use serif font for main headlines */
 h1 {
+  font-family: var(--font-playfair), 'Playfair Display', Georgia, serif;
   font-size: 32px;
-  font-weight: 500;
+  font-weight: 400;
   text-align: center;
-  margin-bottom: 48px;
+  margin-bottom: 24px;
   letter-spacing: -0.5px;
   line-height: 1.3;
   color: var(--dark);
@@ -134,30 +137,35 @@ h1 {
 
 @media (max-width: 768px) {
   h1 {
-    font-size: 28px;
+    font-size: 26px;
   }
 }
 
-/* Form Groups */
+/* Form Groups - Generous spacing for breathing room */
 .form-group {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
 .form-label {
   display: block;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
-  color: var(--gray);
-  margin-bottom: 8px;
+  color: var(--dark);
+  margin-bottom: 10px;
 }
 
-/* Form Inputs */
+/* Reduce margin when form-groups are inside other containers */
+.form-group .form-group {
+  margin-bottom: 20px;
+}
+
+/* Form Inputs - Clean minimal style */
 .form-input,
 .form-select {
   width: 100%;
   padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid var(--light-gray);
+  border-radius: 10px;
   font-size: 15px;
   font-family: 'Inter', sans-serif;
   transition: all 0.2s ease;
@@ -169,6 +177,7 @@ h1 {
 .form-select:focus {
   outline: none;
   border-color: var(--dark);
+  box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.06);
 }
 
 .form-input::placeholder {
@@ -179,23 +188,23 @@ h1 {
   border-color: var(--error);
 }
 
-/* Form Row */
+/* Form Row - Better spacing */
 .form-row {
   display: grid;
   grid-template-columns: 140px 1fr;
-  gap: 12px;
+  gap: 16px;
 }
 
 .form-row-equal {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 20px;
 }
 
 .form-row-thirds {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
+  gap: 16px;
 }
 
 @media (max-width: 768px) {
@@ -203,6 +212,7 @@ h1 {
   .form-row-equal,
   .form-row-thirds {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 }
 
@@ -247,15 +257,18 @@ h1 {
   cursor: pointer;
 }
 
-/* Radio Group */
+/* Radio Group - Clean pill-style buttons */
 .radio-group {
   display: flex;
-  gap: 16px;
-  margin-top: 12px;
+  gap: 12px;
+  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .radio-option {
-  flex: 1;
+  flex: 0 0 auto;
+  min-width: 100px;
+  max-width: 180px;
 }
 
 .radio-option input[type="radio"] {
@@ -264,38 +277,41 @@ h1 {
 
 .radio-label {
   display: block;
-  padding: 14px 20px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 14px 28px;
+  border: 1px solid var(--light-gray);
+  border-radius: 50px;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   color: var(--dark);
-  background: linear-gradient(180deg, rgba(17, 24, 39, 0.02), rgba(17, 24, 39, 0.01));
-  box-shadow: 0 6px 14px rgba(17, 24, 39, 0.06);
+  background: white;
 }
 
 .radio-option input[type="radio"]:checked + .radio-label {
   background: var(--dark);
   color: white;
   border-color: var(--dark);
-  box-shadow: 0 12px 24px rgba(17, 24, 39, 0.2);
-  transform: translateY(-1px);
 }
 
 .radio-label:hover {
   border-color: var(--dark);
-  transform: translateY(-1px);
 }
 
-/* Helper Text */
+/* Wide radio labels for longer text */
+.radio-option.wide {
+  max-width: 220px;
+}
+
+/* Helper Text - Subtle and less prominent */
 .helper-text {
   font-size: 13px;
   color: var(--gray);
   margin-top: 8px;
+  margin-bottom: 0;
   line-height: 1.5;
+  opacity: 0.85;
 }
 
 /* Error Message */
@@ -305,18 +321,21 @@ h1 {
   margin-top: 6px;
 }
 
-/* Buttons */
+/* Buttons - Clean pill style */
 .btn-next {
   width: 100%;
-  padding: 16px;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 16px 32px;
   background: var(--dark);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 50px;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  margin-top: 32px;
+  margin-top: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -327,25 +346,24 @@ h1 {
 
 .btn-next:hover {
   background: #000000;
-  transform: translateY(-1px);
 }
 
 .btn-next:active {
-  transform: translateY(0);
+  transform: scale(0.98);
 }
 
 .btn-next:disabled {
-  opacity: 0.6;
+  opacity: 0.4;
   cursor: not-allowed;
   transform: none;
 }
 
 .btn-back {
-  padding: 16px 32px;
+  padding: 16px 28px;
   background: transparent;
   color: var(--gray);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 50px;
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
@@ -354,25 +372,28 @@ h1 {
 }
 
 .btn-back:hover {
-  background: var(--bg);
-  border-color: var(--gray);
+  border-color: var(--dark);
+  color: var(--dark);
 }
 
 .btn-back:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-/* Button Row */
+/* Button Row - More breathing room */
 .button-row {
   display: flex;
-  gap: 12px;
-  margin-top: 32px;
+  gap: 16px;
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--light-gray);
 }
 
 .button-row .btn-next {
   flex: 1;
   margin-top: 0;
+  max-width: none;
 }
 
 /* Progress Bar */
@@ -493,38 +514,40 @@ h1 {
   font-weight: 500;
 }
 
-/* Checkbox styling */
+/* Checkbox styling - Clean minimal with better spacing */
 .checkbox-group {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 14px 18px;
+  border: 1px solid var(--light-gray);
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: linear-gradient(180deg, rgba(17, 24, 39, 0.02), rgba(17, 24, 39, 0.01));
-  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.06);
+  background: white;
+  margin-bottom: 8px;
+}
+
+.checkbox-group:last-child {
+  margin-bottom: 0;
 }
 
 .checkbox-group:hover {
   border-color: var(--dark);
-  transform: translateY(-1px);
 }
 
 .checkbox-group input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   accent-color: var(--dark);
   cursor: pointer;
   flex-shrink: 0;
-  margin-top: 2px;
 }
 
 .checkbox-label {
   font-size: 14px;
   color: var(--dark);
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 /* Loading spinner */
@@ -547,25 +570,26 @@ h1 {
 /* MERIDIAN GUIDANCE PATTERN STYLES */
 /* ═══════════════════════════════════════════════════════════════ */
 
-/* Guidance Header */
+/* Guidance Header - Clean minimal design with generous spacing */
 .guidance-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 48px;
 }
 
 .guidance-title {
+  font-family: var(--font-playfair), 'Playfair Display', Georgia, serif;
   font-size: 32px;
-  font-weight: 500;
+  font-weight: 400;
   text-align: center;
   margin-bottom: 16px;
-  letter-spacing: -0.5px;
-  line-height: 1.3;
+  letter-spacing: -0.3px;
+  line-height: 1.25;
   color: var(--dark);
 }
 
 @media (max-width: 768px) {
   .guidance-title {
-    font-size: 28px;
+    font-size: 26px;
   }
 }
 
@@ -574,7 +598,7 @@ h1 {
   color: var(--gray);
   margin-bottom: 8px;
   line-height: 1.6;
-  max-width: 600px;
+  max-width: 520px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -582,9 +606,12 @@ h1 {
 .guidance-guardrail {
   font-size: 14px;
   color: var(--gray);
-  margin-bottom: 16px;
+  margin-bottom: 0;
   line-height: 1.5;
   font-style: italic;
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* USCIS Wording Toggle */
@@ -628,45 +655,48 @@ h1 {
   margin-right: auto;
 }
 
-/* Guided Panel */
+/* Guided Panel - Minimal clean design */
 .guided-panel {
-  margin: 0 auto 32px;
-  max-width: 760px;
-  background: linear-gradient(180deg, rgba(17, 24, 39, 0.04), rgba(17, 24, 39, 0.02));
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 18px 22px;
+  margin: 0 auto 40px;
+  max-width: 520px;
+  background: transparent;
+  border: 1px solid var(--light-gray);
+  border-radius: 12px;
+  padding: 20px 24px;
 }
 
 .guided-panel-title {
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 1.5px;
   color: var(--gray);
-  margin-bottom: 10px;
-  font-weight: 600;
+  margin-bottom: 12px;
+  font-weight: 500;
 }
 
 .guided-panel-list {
   display: grid;
-  gap: 8px;
-  padding-left: 18px;
+  gap: 6px;
+  padding-left: 16px;
   margin: 0;
-  color: var(--dark);
+  color: var(--gray);
   font-size: 14px;
   line-height: 1.6;
 }
 
-/* Ever Callout */
+/* Ever Callout - Subtle clean design */
 .ever-callout {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   padding: 16px 20px;
-  background: #FEF3C7;
-  border: 1px solid #F59E0B;
-  border-radius: 8px;
-  margin-bottom: 24px;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: 12px;
+  margin-bottom: 32px;
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .ever-callout-icon {
@@ -679,31 +709,99 @@ h1 {
   font-size: 14px;
   color: #92400E;
   line-height: 1.5;
-  font-weight: 500;
+  font-weight: 400;
   margin: 0;
 }
 
-/* Question Item with Guidance */
+/* Question Item with Guidance - Clean minimal */
 .question-with-guidance {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
 .question-intent {
   font-size: 13px;
   color: var(--gray);
-  margin-top: 6px;
-  margin-bottom: 6px;
+  margin-top: 4px;
+  margin-bottom: 8px;
   line-height: 1.5;
-  max-width: 720px;
+  opacity: 0.9;
 }
 
 .question-guardrail {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--gray);
   margin-top: 2px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   font-style: italic;
-  max-width: 720px;
+  opacity: 0.85;
+}
+
+/* Visual spacer between major sections */
+.section-spacer {
+  height: 24px;
+}
+
+/* Conditional content that appears after Yes/No */
+.conditional-content {
+  margin-top: 20px;
+  padding: 24px;
+  background: var(--bg);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   QUESTION CARDS - Group related questions visually
+   ═══════════════════════════════════════════════════════════════ */
+
+.question-card {
+  background: white;
+  border: 1px solid var(--light-gray);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+}
+
+.question-card:last-child {
+  margin-bottom: 0;
+}
+
+.question-card-title {
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--gray);
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--light-gray);
+}
+
+/* Reduce margins inside cards */
+.question-card .form-group {
+  margin-bottom: 24px;
+}
+
+.question-card .form-group:last-child {
+  margin-bottom: 0;
+}
+
+/* Form card background when using question cards */
+.form-card.has-question-cards {
+  background: var(--bg);
+  padding: 40px 48px 56px;
+}
+
+@media (max-width: 768px) {
+  .question-card {
+    padding: 24px 20px;
+    border-radius: 12px;
+  }
+
+  .form-card.has-question-cards {
+    padding: 24px 16px 40px;
+    background: var(--bg);
+  }
 }
 
 /* Section Divider with Title */
@@ -711,7 +809,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin: 32px 0 24px;
+  margin: 40px 0 28px;
 }
 
 .section-divider::before,
@@ -723,8 +821,371 @@ h1 {
 }
 
 .section-divider-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SINGLE QUESTION SCREEN LAYOUT (Part 9 Background)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Container for single-question screen */
+.single-question-screen {
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  min-height: 50vh;
+  justify-content: center;
+  padding: 40px 20px;
+  position: relative;
+}
+
+/* Part label at top: "PART 9 • BACKGROUND" */
+.sq-part-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--gray);
+}
+
+/* Large serif headline question */
+.sq-headline {
+  font-family: var(--font-playfair), 'Playfair Display', 'Georgia', serif;
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--dark);
+  margin: 0;
+  max-width: 500px;
+}
+
+@media (max-width: 768px) {
+  .sq-headline {
+    font-size: 26px;
+  }
+}
+
+/* Subtle helper text below headline */
+.sq-helper {
+  font-size: 15px;
+  color: var(--gray);
+  line-height: 1.5;
+  max-width: 450px;
+}
+
+/* Question counter: "Question 3 of 46" */
+.sq-counter {
+  font-size: 12px;
+  color: var(--gray);
+  letter-spacing: 0.5px;
+}
+
+/* Large pill-shaped Yes/No buttons */
+.sq-radio-group {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin: 16px 0;
+  width: 100%;
+  max-width: 340px;
+}
+
+.sq-radio-option {
+  flex: 1;
+}
+
+.sq-radio-option input[type="radio"] {
+  display: none;
+}
+
+.sq-radio-label {
+  display: block;
+  padding: 18px 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--dark);
+  background: var(--bg);
+}
+
+.sq-radio-option input[type="radio"]:checked + .sq-radio-label {
+  background: var(--dark);
+  color: white;
+  border-color: var(--dark);
+}
+
+.sq-radio-label:hover {
+  border-color: var(--dark);
+}
+
+/* Black pill "Save & continue" button */
+.sq-continue-btn {
+  width: 100%;
+  max-width: 280px;
+  padding: 16px 32px;
+  background: var(--dark);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: inherit;
+}
+
+.sq-continue-btn:hover {
+  background: #000000;
+}
+
+.sq-continue-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* "Review later" text link */
+.sq-review-later-link {
+  font-size: 14px;
+  color: var(--gray);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+  font-family: inherit;
+}
+
+.sq-review-later-link:hover {
+  color: var(--dark);
+}
+
+.sq-review-later-link.is-flagged {
+  color: #D97706;
+}
+
+/* Draft footer */
+.sq-draft-footer {
+  font-size: 13px;
+  color: var(--gray);
+  text-align: center;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--light-gray);
+  width: 100%;
+  max-width: 500px;
+}
+
+/* Back button for single question */
+.sq-back-btn {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: none;
+  border: none;
+  color: var(--gray);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.2s;
+  font-family: inherit;
+}
+
+.sq-back-btn:hover {
+  color: var(--dark);
+}
+
+/* Explanation notice styling for single question screen */
+.sq-explanation-notice {
+  text-align: left;
+  max-width: 400px;
+  padding: 16px 20px;
+  background: #EFF6FF;
+  border: 1px solid #93C5FD;
+  border-radius: 12px;
+  margin: 8px 0;
+}
+
+.sq-explanation-notice p {
+  font-size: 14px;
+  color: #1E40AF;
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+}
+
+.sq-explanation-notice-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.sq-explanation-notice .btn-primary {
+  padding: 10px 16px;
+  background: #3B82F6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.sq-explanation-notice .btn-secondary {
+  padding: 10px 16px;
+  background: white;
+  color: #475569;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Hide form card styling for single question screen */
+.single-question-container .form-card {
+  box-shadow: none;
+  border: none;
+  padding: 40px 20px;
+  max-width: 100%;
+}
+
+/* Compound field sections (crime table, selective service, titles) */
+.sq-compound-section {
+  width: 100%;
+  max-width: 500px;
+  margin-top: 24px;
+  padding: 24px;
+  background: #F8FAFC;
+  border: 1px solid var(--light-gray);
+  border-radius: 12px;
+  text-align: left;
+}
+
+.sq-compound-label {
+  font-size: 14px;
+  color: var(--gray);
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+.sq-add-btn {
+  padding: 10px 18px;
+  background: white;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--gray);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.sq-add-btn:hover {
+  border-color: var(--dark);
+  color: var(--dark);
+  background: #FAFAFA;
+}
+
+.sq-crime-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sq-crime-entry {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.sq-crime-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #F8FAFC;
+  border-bottom: 1px solid var(--light-gray);
   font-size: 14px;
   font-weight: 600;
   color: var(--dark);
-  white-space: nowrap;
+}
+
+.sq-remove-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: #EF4444;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.sq-remove-btn:hover {
+  background: #FEE2E2;
+}
+
+.sq-crime-fields {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sq-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 500px) {
+  .sq-field-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sq-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sq-field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dark);
+}
+
+.sq-field .form-input {
+  font-size: 14px;
+}
+
+.sq-field-hint {
+  font-size: 12px;
+  color: var(--gray);
+  margin-top: 4px;
 }

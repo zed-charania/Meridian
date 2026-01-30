@@ -600,6 +600,26 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     # Q15.b - Arrested
     set_yes_no("form1[0].#subform[8].P12_Line21", data.get("q_arrested", ""))
 
+    # Q15.c - Crime details table (up to 4 entries on form)
+    crimes_data = data.get("crimes", "")
+    if crimes_data:
+        try:
+            crimes = json.loads(crimes_data) if isinstance(crimes_data, str) else crimes_data
+            for i, crime in enumerate(crimes[:4]):  # PDF has space for 4 crime entries
+                idx = i + 1
+                if crime.get("crime_description"):
+                    fields[f"form1[0].#subform[7].P12_Crime{idx}_Nature[0]"] = crime["crime_description"]
+                if crime.get("date_of_crime"):
+                    fields[f"form1[0].#subform[7].P12_Crime{idx}_Date[0]"] = format_date(crime["date_of_crime"])
+                if crime.get("place_of_crime"):
+                    fields[f"form1[0].#subform[7].P12_Crime{idx}_Location[0]"] = crime["place_of_crime"]
+                if crime.get("result_disposition"):
+                    fields[f"form1[0].#subform[7].P12_Crime{idx}_Outcome[0]"] = crime["result_disposition"]
+                if crime.get("sentence"):
+                    fields[f"form1[0].#subform[7].P12_Crime{idx}_Sentence[0]"] = crime["sentence"]
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     # Q18 - False info to govt
     set_yes_no("form1[0].#subform[8].P12_Line23", data.get("q_false_info_us_government", ""))
     # Q19 - Lied to govt
@@ -636,6 +656,61 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     set_yes_no("form1[0].#subform[9].P12_Line36", data.get("q_willing_take_oath", ""))
     # Q35 - Bear arms (REVERSED: [0]=Y, [1]=N)
     set_yes_no("form1[0].#subform[9].P12_Line37", data.get("q_willing_bear_arms", ""), yes_idx=0, no_idx=1)
+    # Q36 - Willing noncombatant
+    set_yes_no("form1[0].#subform[9].P12_Line38", data.get("q_willing_noncombatant", ""))
+    # Q37 - Willing work national importance
+    set_yes_no("form1[0].#subform[9].P12_Line39", data.get("q_willing_work_national_importance", ""))
+
+    # --- Additional Missing Fields ---
+    # Q4.c - Nonresident alien tax
+    set_yes_no("form1[0].#subform[5].P9_Line4c", data.get("q_nonresident_alien_tax", ""))
+    # Q5.b - Advocated overthrow
+    set_yes_no("form1[0].#subform[5].P9_5c", data.get("q_advocated_overthrow", ""))
+    # Q16 - Completed probation
+    set_yes_no("form1[0].#subform[8].P12_Line22", data.get("q_completed_probation", ""))
+    # Q17.c - Marriage fraud
+    set_yes_no("form1[0].#subform[9].P12_Line30c", data.get("q_marriage_fraud", ""))
+    # Q17.d - Polygamy
+    set_yes_no("form1[0].#subform[9].P12_Line30d", data.get("q_polygamy", ""))
+    # Q17.e - Helped illegal entry
+    set_yes_no("form1[0].#subform[9].P12_Line30e", data.get("q_helped_illegal_entry", ""))
+    # Q17.h - Misrepresentation public benefits
+    set_yes_no("form1[0].#subform[9].P12_Line30h", data.get("q_misrepresentation_public_benefits", ""))
+    # Q21 - Removal proceedings
+    set_yes_no("form1[0].#subform[8].P12_Line26", data.get("q_removal_proceedings", ""))
+    # Q22.b - Registered selective service
+    set_yes_no("form1[0].#subform[7].P12_Line17", data.get("q_registered_selective_service", ""))
+    # Q22.c - Selective service number
+    if data.get("selective_service_number"):
+        fields["form1[0].#subform[7].P12_Line18_SSNumber[0]"] = data["selective_service_number"]
+    # Q22.d - Selective service date
+    if data.get("selective_service_date"):
+        fields["form1[0].#subform[7].P12_Line18_SSDate[0]"] = format_date(data["selective_service_date"])
+    # Q23 - Left US avoid draft
+    set_yes_no("form1[0].#subform[7].P12_Line19", data.get("q_left_us_avoid_draft", ""))
+    # Q24 - Applied military exemption
+    set_yes_no("form1[0].#subform[7].P12_Line20", data.get("q_applied_military_exemption", ""))
+    # Q26.a - Current military member
+    set_yes_no("form1[0].#subform[9].P12_Line33a", data.get("q_current_military_member", ""))
+    # Q26.b - Scheduled deploy
+    set_yes_no("form1[0].#subform[9].P12_Line33b", data.get("q_scheduled_deploy", ""))
+    # Q26.c - Stationed outside US
+    set_yes_no("form1[0].#subform[9].P12_Line33c", data.get("q_stationed_outside_us", ""))
+    # Q26.d - Former military outside US
+    set_yes_no("form1[0].#subform[9].P12_Line33d", data.get("q_former_military_outside_us", ""))
+    # Q30.a - Title of nobility
+    set_yes_no("form1[0].#subform[9].P12_Line29a", data.get("q_title_of_nobility", ""))
+    # Q30.b - Willing to give up titles
+    set_yes_no("form1[0].#subform[9].P12_Line29b", data.get("q_willing_to_give_up_titles", ""))
+    # Q30.c - List of titles
+    if data.get("q_titles_list"):
+        fields["form1[0].#subform[9].P12_Line29c_TitlesList[0]"] = data["q_titles_list"]
+    # Q32 - Understand oath
+    set_yes_no("form1[0].#subform[9].P12_Line35b", data.get("q_understand_oath", ""))
+    # Q33 - Unable oath disability
+    set_yes_no("form1[0].#subform[9].P12_Line35c", data.get("q_unable_oath_disability", ""))
+    # Habitual drunkard (Q17 category)
+    set_yes_no("form1[0].#subform[9].P12_Line30_habitual", data.get("q_habitual_drunkard", ""))
 
     # ═══════════════════════════════════════════════════════════════
     # PART 13: CONTACT INFO (Page 11)
