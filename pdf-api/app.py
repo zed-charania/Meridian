@@ -14,6 +14,7 @@ from pypdf import PdfReader, PdfWriter
 from pypdf.generic import NameObject, BooleanObject
 import os
 import io
+import json
 
 app = Flask(__name__)
 CORS(app)
@@ -34,6 +35,23 @@ def format_date(date_str: str) -> str:
     return date_str
 
 
+def safe_get_array(data: dict, key: str, default=None):
+    """Safely get an array from data, handling JSON strings."""
+    if default is None:
+        default = []
+    value = data.get(key, default)
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return default
+
+
 def map_form_data_to_pdf_fields(data: dict) -> dict:
     """
     Map intake form data to PDF field names with correct checkbox states.
@@ -43,10 +61,12 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     # Helper for Yes/No checkboxes
     def set_yes_no(field_base: str, value: str, yes_idx: int = 1, no_idx: int = 0):
         """Set Yes/No checkbox. Default: [0]=No, [1]=Yes. Some are reversed."""
-        if value and value.lower() == "yes":
-            fields[f"{field_base}[{yes_idx}]"] = "/Y"
-        elif value and value.lower() == "no":
-            fields[f"{field_base}[{no_idx}]"] = "/N"
+        if value:
+            value_lower = str(value).lower().strip()
+            if value_lower == "yes":
+                fields[f"{field_base}[{yes_idx}]"] = "/Y"
+            elif value_lower == "no":
+                fields[f"{field_base}[{no_idx}]"] = "/N"
 
     # ═══════════════════════════════════════════════════════════════
     # A-NUMBER (All 14 pages)
@@ -101,8 +121,8 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
 
     # Other Names (array or individual fields)
     if data.get("has_used_other_names") == "yes":
-        other_names = data.get("other_names", [])
-        name1 = other_names[0] if len(other_names) > 0 else {}
+        other_names = safe_get_array(data, "other_names", [])
+        name1 = other_names[0] if len(other_names) > 0 and isinstance(other_names[0], dict) else {}
         if name1.get("family_name") or data.get("other_last_name_1"):
             fields["form1[0].#subform[0].Line2_FamilyName1[0]"] = name1.get("family_name") or data.get("other_last_name_1", "")
         if name1.get("given_name") or data.get("other_first_name_1"):
@@ -110,7 +130,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if name1.get("middle_name") or data.get("other_middle_name_1"):
             fields["form1[0].#subform[0].Line3_MiddleName1[0]"] = name1.get("middle_name") or data.get("other_middle_name_1", "")
 
-        name2 = other_names[1] if len(other_names) > 1 else {}
+        name2 = other_names[1] if len(other_names) > 1 and isinstance(other_names[1], dict) else {}
         if name2.get("family_name") or data.get("other_last_name_2"):
             fields["form1[0].#subform[0].Line2_FamilyName2[0]"] = name2.get("family_name") or data.get("other_last_name_2", "")
         if name2.get("given_name") or data.get("other_first_name_2"):
@@ -152,8 +172,10 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     # Countries
     if data.get("country_of_birth"):
         fields["form1[0].#subform[1].P2_Line10_CountryOfBirth[0]"] = data["country_of_birth"]
-    if data.get("country_of_citizenship"):
-        fields["form1[0].#subform[1].P2_Line11_CountryOfNationality[0]"] = data["country_of_citizenship"]
+    # Part 2.11 - Country of Citizenship/Nationality (always output if present)
+    country_of_citizenship = data.get("country_of_citizenship") or data.get("country_of_nationality")
+    if country_of_citizenship:
+        fields["form1[0].#subform[1].P2_Line11_CountryOfNationality[0]"] = country_of_citizenship
 
     # Q10 - Disability Accommodations
     if data.get("request_disability_accommodations") == "yes":
@@ -199,22 +221,32 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     elif apt_type == "flr":
         fields["form1[0].#subform[2].P4_Line1_Unit[0]"] = "/FLR"
 
-    if data.get("apt_ste_flr"):
-        fields["form1[0].#subform[2].P4_Line1_Number[0]"] = data["apt_ste_flr"]
+    # Apt/Ste/Flr number - always output if present (not optional in UI)
+    apt_ste_flr = data.get("apt_ste_flr") or ""
+    if apt_ste_flr:
+        fields["form1[0].#subform[2].P4_Line1_Number[0]"] = apt_ste_flr
 
     if data.get("city"):
         fields["form1[0].#subform[2].P4_Line1_City[0]"] = data["city"]
 
-    if data.get("state"):
-        state_val = f" {data['state'].upper()}" if not data['state'].startswith(' ') else data['state']
+    # State/Province - always output if present
+    state_val = data.get("state") or ""
+    if state_val:
+        state_val = f" {state_val.upper()}" if not state_val.startswith(' ') else state_val
         fields["form1[0].#subform[2].P4_Line1_State[0]"] = state_val
+    
+    province_val = data.get("residence_province") or ""
+    if province_val:
+        fields["form1[0].#subform[2].P4_Line1_Province[0]"] = province_val
 
-    if data.get("zip_code"):
-        fields["form1[0].#subform[2].P4_Line1_ZipCode[0]"] = data["zip_code"]
-    if data.get("residence_province"):
-        fields["form1[0].#subform[2].P4_Line1_Province[0]"] = data["residence_province"]
-    if data.get("residence_postal_code"):
-        fields["form1[0].#subform[2].P4_Line1_PostalCode[0]"] = data["residence_postal_code"]
+    # Zip/Postal Code - always output if present
+    zip_code_val = data.get("zip_code") or ""
+    if zip_code_val:
+        fields["form1[0].#subform[2].P4_Line1_ZipCode[0]"] = zip_code_val
+    
+    postal_code_val = data.get("residence_postal_code") or ""
+    if postal_code_val:
+        fields["form1[0].#subform[2].P4_Line1_PostalCode[0]"] = postal_code_val
 
     fields["form1[0].#subform[2].P4_Line1_Country[0]"] = "United States"
 
@@ -228,8 +260,17 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if isinstance(to_val, str) and to_val.upper() != "PRESENT":
             fields["form1[0].#subform[2].P4_Line1_DatesofResidence[0]"] = format_date(to_val)
 
-    # Mailing address fields (Part 4, Question 3)
-    if data.get("mailing_same_as_residence") == "no":
+    # Part 4.2 - Is your current physical address also your current mailing address?
+    # This checkbox determines if Part 4.3 (mailing address) is required
+    mailing_same = data.get("mailing_same_as_residence", "")
+    if mailing_same == "yes":
+        fields["form1[0].#subform[2].P4_Line2[1]"] = "/Y"
+    elif mailing_same == "no":
+        fields["form1[0].#subform[2].P4_Line2[0]"] = "/N"
+
+    # Part 4.3 - Mailing address fields (only required if Part 4.2 is "no")
+    # If Part 4.2 is "yes", skip to Part 5 (mailing address fields should be empty)
+    if mailing_same == "no":
         mailing_unit = data.get("mailing_apt_type", "").lower()
         if mailing_unit == "apt":
             fields["form1[0].#subform[3].P5_Line1b_Unit[2]"] = "/APT"
@@ -257,8 +298,10 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
             fields["form1[0].#subform[3].P5_Line1b_Country[0]"] = data["mailing_country"]
 
     # Previous physical addresses (Part 4.1 table)
-    residence_addresses = data.get("residence_addresses", [])
+    residence_addresses = safe_get_array(data, "residence_addresses", [])
     for i, address in enumerate(residence_addresses[:3]):
+        if not isinstance(address, dict):
+            continue
         idx = i + 1
         if address.get("street_address"):
             fields[f"form1[0].#subform[2].P4_Line3_PhysicalAddress{idx}[0]"] = address["street_address"]
@@ -367,8 +410,11 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     elif data.get("spouse_is_military_member") == "no":
         fields["form1[0].#subform[3].P7_Line2_Forces[0]"] = "/N"
 
-    if data.get("times_married"):
-        fields["form1[0].#subform[3].Part9Line3_TimesMarried[0]"] = str(data["times_married"])
+    # Part 5.3 - Times Married: null = 0, 0 = 0, etc.
+    times_married = data.get("times_married")
+    if times_married is None or times_married == "":
+        times_married = "0"
+    fields["form1[0].#subform[3].Part9Line3_TimesMarried[0]"] = str(times_married)
 
     # Spouse info
     if marital == "married":
@@ -383,7 +429,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if data.get("spouse_date_of_marriage"):
             fields["form1[0].#subform[3].P10_Line4e_DateEnterMarriage[0]"] = format_date(data["spouse_date_of_marriage"])
 
-        # Spouse address same as applicant
+        # Part 4.d - Spouse address same as applicant (must come first)
         if data.get("spouse_address_same_as_applicant") == "yes":
             fields["form1[0].#subform[3].P10_Line5_Citizen[1]"] = "/Y"
             fields["form1[0].#subform[10].P10_Line1_Citizen[1]"] = "/Y"
@@ -391,11 +437,16 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
             fields["form1[0].#subform[3].P10_Line5_Citizen[0]"] = "/N"
             fields["form1[0].#subform[10].P10_Line1_Citizen[0]"] = "/N"
 
-        # Spouse citizenship by birth
-        if data.get("spouse_citizenship_by_birth") == "yes":
+        # Part 4.c and 5.a/5.b - Spouse citizenship (conditional logic)
+        # 5.a - When did your current spouse become a U.S. citizen?
+        spouse_citizenship_by_birth = data.get("spouse_citizenship_by_birth")
+        if spouse_citizenship_by_birth == "yes":
+            # By Birth in the United States - Go to Item Number 7
             fields["form1[0].#subform[3].P10_Line5a_When[0]"] = "/B"
-        elif data.get("spouse_citizenship_by_birth") == "no":
+        elif spouse_citizenship_by_birth == "no":
+            # Other - Complete Item Number 5.b
             fields["form1[0].#subform[3].P10_Line5a_When[1]"] = "/O"
+            # 5.b - Date Your Current Spouse Became a U.S. Citizen (required if 5.a is "no")
             if data.get("spouse_date_became_citizen"):
                 fields["form1[0].#subform[3].P10_Line5b_DateBecame[0]"] = format_date(data["spouse_date_became_citizen"])
 
@@ -403,9 +454,11 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if data.get("spouse_a_number"):
             fields["form1[0].#subform[4].#area[5].P7_Line6_ANumber[0]"] = data["spouse_a_number"]
 
-        # Spouse times married (Page 5 - Q7)
-        if data.get("spouse_times_married"):
-            fields["form1[0].#subform[4].P10_Line4g_Employer[0]"] = str(data["spouse_times_married"])
+        # Part 5.7 - Spouse times married: null = 0, 0 = 0, etc.
+        spouse_times_married = data.get("spouse_times_married")
+        if spouse_times_married is None or spouse_times_married == "":
+            spouse_times_married = "0"
+        fields["form1[0].#subform[4].P10_Line4g_Employer[0]"] = str(spouse_times_married)
 
         # Spouse employer (Page 5 - Q8)
         if data.get("spouse_current_employer"):
@@ -417,8 +470,10 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     if data.get("total_children"):
         fields["form1[0].#subform[4].P11_Line1_TotalChildren[0]"] = str(data["total_children"])
 
-    children = data.get("children", [])
+    children = safe_get_array(data, "children", [])
     for i, child in enumerate(children[:3]):
+        if not isinstance(child, dict):
+            continue
         idx = i + 1
         if child.get("first_name") or child.get("last_name"):
             name = f"{child.get('first_name', '')} {child.get('last_name', '')}".strip()
@@ -452,10 +507,10 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     # PART 3: EMPLOYMENT (Page 5)
     # Uses P5_EmployerName for Name column, P7_ for other columns
     # ═══════════════════════════════════════════════════════════════
-    employment_history = data.get("employment_history", [])
+    employment_history = safe_get_array(data, "employment_history", [])
 
     # Employment 1
-    emp1 = employment_history[0] if len(employment_history) > 0 else {}
+    emp1 = employment_history[0] if len(employment_history) > 0 and isinstance(employment_history[0], dict) else {}
     employer1 = emp1.get("employer_or_school") or data.get("current_employer", "")
     if employer1:
         fields["form1[0].#subform[4].P5_EmployerName1[0]"] = employer1
@@ -477,7 +532,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         fields["form1[0].#subform[4].P7_From1[1]"] = format_date(from1)
 
     # Employment 2
-    if len(employment_history) > 1:
+    if len(employment_history) > 1 and isinstance(employment_history[1], dict):
         emp2 = employment_history[1]
         if emp2.get("employer_or_school"):
             fields["form1[0].#subform[4].P5_EmployerName2[0]"] = emp2["employer_or_school"]
@@ -497,7 +552,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
             fields["form1[0].#subform[4].P7_To2[0]"] = format_date(emp2["dates_to"])
 
     # Employment 3
-    if len(employment_history) > 2:
+    if len(employment_history) > 2 and isinstance(employment_history[2], dict):
         emp3 = employment_history[2]
         if emp3.get("employer_or_school"):
             fields["form1[0].#subform[4].P5_EmployerName3[0]"] = emp3["employer_or_school"]
@@ -520,8 +575,10 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     # PART 4: TIME OUTSIDE US (Pages 5-6)
     # ═══════════════════════════════════════════════════════════════
     # Trips (up to 6)
-    trips = data.get("trips", [])
+    trips = safe_get_array(data, "trips", [])
     for i, trip in enumerate(trips[:6]):
+        if not isinstance(trip, dict):
+            continue
         idx = i + 1
         if trip.get("date_left_us"):
             fields[f"form1[0].#subform[5].P8_Line1_DateLeft{idx}[0]"] = format_date(trip["date_left_us"])
@@ -594,31 +651,29 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     # Q14 - Used under 15 in hostilities
     set_yes_no("form1[0].#subform[6].P9_Line14", data.get("q_used_under_15_hostilities", ""))
 
-    # --- Page 8 (subform[7]) Q15-16, Q22 ---
+    # --- Page 8 (subform[7] and subform[8]) Q15-16, Q22 ---
     # Q15.a - Committed crime not arrested
     set_yes_no("form1[0].#subform[8].P12_Line20", data.get("q_committed_crime_not_arrested", ""))
     # Q15.b - Arrested
     set_yes_no("form1[0].#subform[8].P12_Line21", data.get("q_arrested", ""))
 
     # Q15.c - Crime details table (up to 4 entries on form)
-    crimes_data = data.get("crimes", "")
-    if crimes_data:
-        try:
-            crimes = json.loads(crimes_data) if isinstance(crimes_data, str) else crimes_data
-            for i, crime in enumerate(crimes[:4]):  # PDF has space for 4 crime entries
-                idx = i + 1
-                if crime.get("crime_description"):
-                    fields[f"form1[0].#subform[7].P12_Crime{idx}_Nature[0]"] = crime["crime_description"]
-                if crime.get("date_of_crime"):
-                    fields[f"form1[0].#subform[7].P12_Crime{idx}_Date[0]"] = format_date(crime["date_of_crime"])
-                if crime.get("place_of_crime"):
-                    fields[f"form1[0].#subform[7].P12_Crime{idx}_Location[0]"] = crime["place_of_crime"]
-                if crime.get("result_disposition"):
-                    fields[f"form1[0].#subform[7].P12_Crime{idx}_Outcome[0]"] = crime["result_disposition"]
-                if crime.get("sentence"):
-                    fields[f"form1[0].#subform[7].P12_Crime{idx}_Sentence[0]"] = crime["sentence"]
-        except (json.JSONDecodeError, TypeError):
-            pass
+    crimes = safe_get_array(data, "crimes", [])
+    if crimes:
+        for i, crime in enumerate(crimes[:4]):  # PDF has space for 4 crime entries
+            if not isinstance(crime, dict):
+                continue
+            idx = i + 1
+            if crime.get("crime_description"):
+                fields[f"form1[0].#subform[7].P12_Crime{idx}_Nature[0]"] = crime["crime_description"]
+            if crime.get("date_of_crime"):
+                fields[f"form1[0].#subform[7].P12_Crime{idx}_Date[0]"] = format_date(crime["date_of_crime"])
+            if crime.get("place_of_crime"):
+                fields[f"form1[0].#subform[7].P12_Crime{idx}_Location[0]"] = crime["place_of_crime"]
+            if crime.get("result_disposition"):
+                fields[f"form1[0].#subform[7].P12_Crime{idx}_Outcome[0]"] = crime["result_disposition"]
+            if crime.get("sentence"):
+                fields[f"form1[0].#subform[7].P12_Crime{idx}_Sentence[0]"] = crime["sentence"]
 
     # Q18 - False info to govt
     set_yes_no("form1[0].#subform[8].P12_Line23", data.get("q_false_info_us_government", ""))
@@ -722,10 +777,14 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     if data.get("email"):
         fields["form1[0].#subform[10].P12_Line5_Email[0]"] = data["email"]
 
-    if data.get("signature_date"):
-        fields["form1[0].#subform[10].P13_DateofSignature[0]"] = format_date(data["signature_date"])
-    if data.get("applicant_signature"):
-        fields["form1[0].#subform[10].P12_SignatureApplicant[0]"] = data["applicant_signature"]
+    # Part 11 - Signature and Date (always output if present)
+    signature_date = data.get("signature_date")
+    if signature_date:
+        fields["form1[0].#subform[10].P13_DateofSignature[0]"] = format_date(signature_date)
+    
+    applicant_signature = data.get("applicant_signature")
+    if applicant_signature:
+        fields["form1[0].#subform[10].P12_SignatureApplicant[0]"] = applicant_signature
 
     # Fee Reduction
     if data.get("fee_reduction_requested") == "yes":
@@ -737,6 +796,8 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         fields["form1[0].#subform[10].P10_Line2_TotalHouseholdIn[0]"] = data["household_income"]
     if data.get("household_size"):
         fields["form1[0].#subform[10].P10_Line3_HouseHoldSize[0]"] = str(data["household_size"])
+    if data.get("household_income_earners"):
+        fields["form1[0].#subform[10].P10_Line4_TotalNumber[0]"] = str(data["household_income_earners"])
     if data.get("is_head_of_household") == "yes":
         fields["form1[0].#subform[10].P10_Line5a[1]"] = "/Y"
     elif data.get("is_head_of_household") == "no":
@@ -745,7 +806,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         fields["form1[0].#subform[10].P10_Line5b_NameOfHousehold[0]"] = data["head_of_household_name"]
 
     # ═══════════════════════════════════════════════════════════════
-    # PART 14: INTERPRETER (Page 12)
+    # PART 12: INTERPRETER (Page 12)
     # ═══════════════════════════════════════════════════════════════
     if data.get("used_interpreter") == "yes":
         if data.get("interpreter_last_name"):
@@ -762,11 +823,13 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
             fields["form1[0].#subform[11].P14_Line5_EmailAddress[0]"] = data["interpreter_email"]
         if data.get("interpreter_language"):
             fields["form1[0].#subform[11].P14_NameOfLanguage[0]"] = data["interpreter_language"]
+        if data.get("interpreter_signature"):
+            fields["form1[0].#subform[11].P14_Signature[0]"] = data["interpreter_signature"]
         if data.get("interpreter_signature_date"):
             fields["form1[0].#subform[11].P14_DateofSignature[0]"] = format_date(data["interpreter_signature_date"])
 
     # ═══════════════════════════════════════════════════════════════
-    # PART 15: PREPARER (Page 12)
+    # PART 13: PREPARER (Page 12)
     # ═══════════════════════════════════════════════════════════════
     if data.get("used_preparer") == "yes":
         if data.get("preparer_last_name"):
@@ -781,13 +844,15 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
             fields["form1[0].#subform[11].P15_Line5_Mobile[0]"] = data["preparer_mobile"]
         if data.get("preparer_email"):
             fields["form1[0].#subform[11].P15_Line6_Email[0]"] = data["preparer_email"]
+        if data.get("preparer_signature"):
+            fields["form1[0].#subform[11].P15_Signature[0]"] = data["preparer_signature"]
         if data.get("preparer_signature_date"):
             fields["form1[0].#subform[11].P15_DateofSignature[0]"] = format_date(data["preparer_signature_date"])
 
     # ═══════════════════════════════════════════════════════════════
     # PART 16: ADDITIONAL INFORMATION (Pages 13-14)
     # ═══════════════════════════════════════════════════════════════
-    additional_entries = data.get("additional_information", [])
+    additional_entries = safe_get_array(data, "additional_information", [])
     additional_field_sets = [
         ("P11_Line3A", "P11_Line3B", "P11_Line3C", "P11_Line3D"),
         ("P11_Line4A", "P11_Line4B", "P11_Line4C", "P11_Line4D"),
@@ -795,6 +860,8 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         ("P11_Line6A", "P11_Line6B", "P11_Line6C", "P11_Line6D"),
     ]
     for idx, entry in enumerate(additional_entries[:4]):
+        if not isinstance(entry, dict):
+            continue
         page_field, part_field, item_field, explanation_field = additional_field_sets[idx]
         if entry.get("page_number"):
             fields[f"form1[0].#subform[12].{page_field}[0]"] = entry["page_number"]

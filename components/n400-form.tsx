@@ -83,6 +83,7 @@ const n400Schema = z.object({
 
   // Disability Accommodations
   request_disability_accommodations: z.string().optional(),
+  disability_prevents_english: z.string().optional(),
 
   // ═══════════════════════════════════════════════════════════════
   // PART 4: CONTACT INFORMATION
@@ -120,6 +121,8 @@ const n400Schema = z.object({
   city: z.string().min(1, "City is required"),
   state: z.string().min(1, "State is required"),
   zip_code: z.string().min(5, "ZIP code is required"),
+  residence_province: z.string().optional(),
+  residence_postal_code: z.string().optional(),
   residence_from: z.string().optional(),
   residence_to: z.string().optional(),
 
@@ -756,26 +759,33 @@ function buildSampleFormValues(): Partial<FormData> {
     country_of_citizenship: "Brazil",
     gender: "female",
     date_became_permanent_resident: "2018-05-14",
-    daytime_phone: "(555) 123-4567",
-    email: "alicia.johnson@example.com",
+    daytime_phone: "(206) 555-1234",
+    mobile_phone: "(206) 555-5678",
+    email: "alicia.m.johnson@email.com",
     a_number: "A123456789",
     uscis_account_number: "USC1234567890",
-    ssa_wants_card: "no",
-    ssa_consent_disclosure: "no",
+    ssn: "123-45-6789",
+    ssa_wants_card: "yes", // Triggers ssa_consent_disclosure requirement
+    ssa_consent_disclosure: "yes", // Required when ssa_wants_card is "yes"
     street_address: "742 Evergreen Terrace",
     apt_ste_flr: "4B",
     city: "Seattle",
     state: "WA",
     zip_code: "98101",
+    residence_province: "",
+    residence_postal_code: "",
     residence_from: "06/01/2019",
     residence_to: "PRESENT",
-    mailing_same_as_residence: "no",
+    mailing_same_as_residence: "no", // Set to "no" to trigger mailing address fields
     mailing_street_address: "PO Box 12345",
-    mailing_apt_ste_flr: "",
-    mailing_in_care_of: "John Johnson",
+    mailing_apt_ste_flr: "Suite 200",
+    mailing_in_care_of: "Michael Johnson",
     mailing_city: "Seattle",
     mailing_state: "WA",
     mailing_zip_code: "98111",
+    mailing_province: "",
+    mailing_postal_code: "",
+    mailing_country: "United States",
     ethnicity: "hispanic",
     race: "white",
     height_feet: "5",
@@ -784,19 +794,151 @@ function buildSampleFormValues(): Partial<FormData> {
     eye_color: "Brown",
     hair_color: "Brown",
     marital_status: "married",
-    // Common yes/no defaults so submit doesn't feel "blocked"
-    has_used_other_names: "no",
-    wants_name_change: "no",
+    times_married: "1",
+    // Spouse info (since married)
+    spouse_is_us_citizen: "yes",
+    spouse_citizenship_by_birth: "no", // Set to "no" to trigger conditional field
+    spouse_date_became_citizen: "2010-05-20", // Required when spouse_citizenship_by_birth is "no"
+    spouse_last_name: "Johnson",
+    spouse_first_name: "Michael",
+    spouse_middle_name: "James",
+    spouse_date_of_birth: "1987-03-15",
+    spouse_date_of_marriage: "2015-08-20",
+    spouse_address_same_as_applicant: "yes",
+    spouse_is_military_member: "no",
+    spouse_times_married: "1",
+    spouse_country_of_birth: "United States",
+    spouse_current_employer: "Microsoft Corporation",
+    spouse_a_number: "A987654321",
+    // Conditional fields set to "yes" to trigger additional information
+    has_used_other_names: "yes", // Triggers other_names array
+    other_names: [
+      {
+        family_name: "Rodriguez",
+        given_name: "Alicia",
+        middle_name: "Maria",
+      },
+      {
+        family_name: "Smith",
+        given_name: "Alicia",
+        middle_name: "Marie",
+      },
+    ],
+    wants_name_change: "yes", // Triggers new name fields
+    new_name_first: "Alexandra",
+    new_name_middle: "Marie",
+    new_name_last: "Johnson-Smith",
     trips_over_6_months: "no",
-    q_arrested: "no",
+    q_arrested: "yes", // Triggers crimes array
     q_committed_crime_not_arrested: "no",
-
-    // Useful defaults for later yes/no flows (keeps submit from feeling like a no-op)
-    request_disability_accommodations: "no",
+    crimes: [
+      {
+        date_of_crime: "2015-03-15",
+        date_of_conviction: "2015-06-20",
+        crime_description: "Traffic violation - Speeding",
+        place_of_crime: "Seattle, WA, United States",
+        result_disposition: "Pleaded guilty",
+        sentence: "Fine paid, no jail time",
+      },
+    ],
+    request_disability_accommodations: "yes", // Triggers disability_prevents_english question
+    disability_prevents_english: "no",
+    q_served_military_police_unit: "no",
     q_failed_to_file_taxes: "no",
     q_owe_taxes: "no",
     q_voted_in_us: "no",
-
+    // Part 9 - General Eligibility
+    q_claimed_us_citizen: "no",
+    q_nonresident_alien_tax: "no",
+    q_title_of_nobility: "yes", // Triggers q_titles_list
+    q_titles_list: "Duchess of Cambridge (by marriage, 2015-2018)\nCountess of Windsor (inherited, 2010)",
+    q_willing_to_give_up_titles: "yes",
+    // Part 9 - Affiliations
+    q_communist_party: "no",
+    q_advocated_overthrow: "no",
+    q_terrorist_org: "no",
+    q_genocide: "no",
+    q_torture: "no",
+    q_killing_person: "no",
+    q_sexual_contact_nonconsent: "no",
+    q_severely_injuring: "no",
+    q_religious_persecution: "no",
+    q_harm_race_religion: "no",
+    // Part 9 - Weapons and Violence
+    q_used_weapon_explosive: "no",
+    q_kidnapping_assassination_hijacking: "no",
+    q_threatened_weapon_violence: "no",
+    // Part 9 - Military/Police Service
+    q_military_police_service: "no",
+    q_armed_group: "no",
+    q_detention_facility: "no",
+    q_group_used_weapons: "no",
+    q_used_weapon_against_person: "no",
+    q_threatened_weapon_use: "no",
+    q_weapons_training: "no",
+    q_sold_provided_weapons: "no",
+    q_recruited_under_15: "no",
+    q_used_under_15_hostilities: "no",
+    // Part 9 - Crimes and Offenses
+    q_completed_probation: "yes",
+    // Part 9 - Moral Character
+    q_habitual_drunkard: "no",
+    q_prostitution: "no",
+    q_controlled_substances: "no",
+    q_marriage_fraud: "no",
+    q_polygamy: "no",
+    q_helped_illegal_entry: "no",
+    q_illegal_gambling: "no",
+    q_failed_child_support: "no",
+    q_misrepresentation_public_benefits: "no",
+    // Part 9 - Immigration Violations
+    q_false_info_us_government: "no",
+    q_lied_us_government: "no",
+    q_removed_deported: "no",
+    q_removal_proceedings: "no",
+    // Part 9 - Selective Service
+    q_male_18_26_lived_us: "no",
+    q_registered_selective_service: "yes",
+    selective_service_number: "12345678",
+    selective_service_date: "2007-01-15",
+    // Part 9 - Military Service
+    q_left_us_avoid_draft: "no",
+    q_applied_military_exemption: "no",
+    q_served_us_military: "no",
+    q_current_military_member: "no",
+    q_scheduled_deploy: "no",
+    q_stationed_outside_us: "no",
+    q_former_military_outside_us: "no",
+    q_discharged_because_alien: "no",
+    q_court_martialed: "no",
+    q_deserted_military: "no",
+    // Part 9 - Oath of Allegiance
+    q_support_constitution: "yes",
+    q_understand_oath: "yes",
+    q_unable_oath_disability: "no",
+    q_willing_take_oath: "yes",
+    q_willing_bear_arms: "yes",
+    q_willing_noncombatant: "yes",
+    q_willing_work_national_importance: "yes",
+    // Children
+    total_children: "2",
+    providing_support_for_children: "yes",
+    children: [
+      {
+        first_name: "Emma",
+        last_name: "Johnson",
+        date_of_birth: "2016-03-20",
+        residence: "resides with me",
+        relationship: "biological daughter",
+      },
+      {
+        first_name: "Lucas",
+        last_name: "Johnson",
+        date_of_birth: "2018-07-10",
+        residence: "resides with me",
+        relationship: "biological son",
+      },
+    ],
     // Provide at least one prior residence/employment/trip entry so PDF tables have something
     residence_addresses: [
       {
@@ -805,23 +947,61 @@ function buildSampleFormValues(): Partial<FormData> {
         city: "Seattle",
         state: "WA",
         zip_code: "98101",
+        province: "",
+        postal_code: "",
         country: "United States",
         dates_from: "2019-06-01",
         dates_to: "PRESENT",
       },
+      {
+        street_address: "123 Main Street",
+        apt_ste_flr: "Apt 5",
+        city: "Portland",
+        state: "OR",
+        zip_code: "97201",
+        province: "",
+        postal_code: "",
+        country: "United States",
+        dates_from: "2017-01-01",
+        dates_to: "2019-05-31",
+      },
     ],
     employment_history: [
       {
-        employer_or_school: "Acme Corp",
-        occupation_or_field: "Software Engineer",
+        employer_or_school: "Amazon Web Services",
+        occupation_or_field: "Senior Software Engineer",
         city: "Seattle",
         state: "WA",
         zip_code: "98101",
-        country: "United States",
         province: "",
         postal_code: "",
-        dates_from: "2020-01-01",
+        country: "United States",
+        dates_from: "2020-01-15",
         dates_to: "PRESENT",
+      },
+      {
+        employer_or_school: "Google LLC",
+        occupation_or_field: "Software Engineer",
+        city: "Seattle",
+        state: "WA",
+        zip_code: "98102",
+        province: "",
+        postal_code: "",
+        country: "United States",
+        dates_from: "2018-06-01",
+        dates_to: "2019-12-31",
+      },
+      {
+        employer_or_school: "University of Washington",
+        occupation_or_field: "Computer Science Student",
+        city: "Seattle",
+        state: "WA",
+        zip_code: "98195",
+        province: "",
+        postal_code: "",
+        country: "United States",
+        dates_from: "2014-09-01",
+        dates_to: "2018-05-31",
       },
     ],
     trips: [
@@ -830,9 +1010,67 @@ function buildSampleFormValues(): Partial<FormData> {
         date_returned_us: "2022-06-10",
         countries_traveled: "Canada",
       },
+      {
+        date_left_us: "2021-12-15",
+        date_returned_us: "2022-01-05",
+        countries_traveled: "Mexico",
+      },
     ],
     total_days_outside_us: "9",
-    total_children: "0",
+    // Part 10 - Fee Reduction (conditional - set to "yes" to fill fee reduction fields)
+    fee_reduction_requested: "yes",
+    household_income: "45000",
+    household_size: "4",
+    is_head_of_household: "yes",
+    head_of_household_name: "Alicia Marie Johnson",
+    // Part 11 - Signature
+    applicant_signature: "Alicia Marie Johnson",
+    signature_date: new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
+    // Part 12 - Interpreter (conditional - set to "yes" to fill interpreter fields)
+    used_interpreter: "yes",
+    interpreter_first_name: "Maria",
+    interpreter_last_name: "Garcia",
+    interpreter_business_name: "Garcia Translation Services LLC",
+    interpreter_phone: "(206) 555-2345",
+    interpreter_mobile: "(206) 555-2346",
+    interpreter_email: "maria.garcia@translation-services.com",
+    interpreter_language: "Spanish",
+    interpreter_signature: "Maria Elena Garcia",
+    interpreter_signature_date: new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
+    // Part 13 - Preparer (conditional - set to "yes" to fill preparer fields)
+    // Part 11 - Signature
+    applicant_signature: "Alicia Marie Johnson",
+    signature_date: new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
+    // Part 12 - Interpreter
+    used_interpreter: "yes",
+    interpreter_first_name: "Maria",
+    interpreter_last_name: "Garcia",
+    interpreter_business_name: "Garcia Translation Services",
+    interpreter_phone: "(206) 555-7890",
+    interpreter_mobile: "(206) 555-7891",
+    interpreter_email: "maria.garcia@garciatranslations.com",
+    interpreter_language: "Spanish",
+    interpreter_signature: "Maria Elena Garcia",
+    interpreter_signature_date: new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
+    // Part 13 - Preparer
+    used_preparer: "yes",
+    preparer_first_name: "Robert",
+    preparer_last_name: "Smith",
+    preparer_business_name: "Smith Legal Services & Immigration",
+    preparer_phone: "(206) 555-3456",
+    preparer_mobile: "(206) 555-3457",
+    preparer_email: "robert.smith@smithlegal.com",
+    preparer_signature: "Robert James Smith, Esq.",
+    preparer_signature_date: new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
+    // Part 14 - Additional Information
+    additional_information: [
+      {
+        page_number: "3",
+        part_number: "Part 4",
+        item_number: "1",
+        explanation: "Additional details about residence history if needed.",
+      },
+    ],
   }
 }
 
@@ -844,6 +1082,7 @@ export default function N400Form() {
   const [isRedirectingToPayment, setIsRedirectingToPayment] = useState(false);
   const [submittedId, setSubmittedId] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
+  const [isFormSubmitted, setIsFormSubmitted] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
@@ -865,8 +1104,8 @@ export default function N400Form() {
   const {
     register,
     handleSubmit,
-    formState: { errors },
     trigger,
+    formState: { errors },
     watch,
     control,
     setValue,
@@ -934,12 +1173,12 @@ export default function N400Form() {
 
     async function loadSession() {
       try {
-        const { data, error } = await supabase.auth.getSession();
-        if (!isActive) return;
+      const { data, error } = await supabase.auth.getSession();
+      if (!isActive) return;
         if (error && error.name !== "AbortError") {
           setAuthError("Unable to verify your session. Please sign in again.");
         }
-        setSession(data.session ?? null);
+      setSession(data.session ?? null);
       } catch (err) {
         // Ignore AbortError from hot reload
         if (err instanceof Error && err.name === "AbortError") return;
@@ -1008,10 +1247,18 @@ export default function N400Form() {
     let isActive = true;
     const formIdParam = searchParams.get("formId");
     const shouldDownload = searchParams.get("download") === "true";
+    const stepParam = searchParams.get("step");
+
+    // Handle step parameter
+    if (stepParam) {
+      const stepNum = parseInt(stepParam, 10);
+      if (!isNaN(stepNum) && stepNum >= 1 && stepNum <= STEPS.length) {
+        setCurrentStep(stepNum);
+      }
+    }
 
     if (formIdParam) {
       setSubmittedId(formIdParam);
-      setCurrentStep(STEPS.length); // Go to final step
 
       // Check payment status for this form
       const checkPaymentStatus = async () => {
@@ -1020,7 +1267,7 @@ export default function N400Form() {
         try {
           const { data, error } = await supabase
             .from("n400_forms")
-            .select("payment_status")
+            .select("payment_status, status")
             .eq("id", formIdParam)
             .single();
 
@@ -1028,15 +1275,14 @@ export default function N400Form() {
 
           if (!error && data) {
             setPaymentStatus(data.payment_status);
+            // Check if form has already been submitted
+            if (data.status === "submitted") {
+              setIsFormSubmitted(true);
+            }
 
-            // Auto-download if returning from successful payment
+            // After payment, show submit button instead of auto-downloading
             if (shouldDownload && data.payment_status === "paid") {
-              // Small delay to ensure UI is ready
-              setTimeout(() => {
-                if (!isActive) return;
-                const downloadBtn = document.querySelector("[data-download-btn]") as HTMLButtonElement;
-                if (downloadBtn) downloadBtn.click();
-              }, 500);
+              // Don't auto-download - let user click submit first
             }
           }
         } catch (err) {
@@ -1055,6 +1301,48 @@ export default function N400Form() {
       isActive = false;
     };
   }, [searchParams, session, supabase]);
+
+  // Check payment status when on Step 16 if we have a submittedId
+  useEffect(() => {
+    let isActive = true;
+
+    const checkPaymentStatusOnStep16 = async () => {
+      // Only check if we're on Step 16, have a submittedId, and payment status is not yet known
+      if (currentStep !== 16 || !submittedId || !session?.access_token || paymentStatus !== null) {
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("n400_forms")
+          .select("payment_status, status")
+          .eq("id", submittedId)
+          .single();
+
+        if (!isActive) return;
+
+        if (!error && data) {
+          setPaymentStatus(data.payment_status);
+          // Check if form has already been submitted
+          if (data.status === "submitted") {
+            setIsFormSubmitted(true);
+          }
+        }
+      } catch (err) {
+        // Ignore AbortError from hot reload
+        if (err instanceof Error && err.name === "AbortError") return;
+        if (isActive) {
+          console.error("Error checking payment status on Step 16:", err);
+        }
+      }
+    };
+
+    checkPaymentStatusOnStep16();
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentStep, submittedId, session, supabase, paymentStatus]);
 
   // Field arrays for dynamic fields
   const { fields: tripFields, append: appendTrip, remove: removeTrip } = useFieldArray({
@@ -1278,6 +1566,7 @@ export default function N400Form() {
 
         // Disability Accommodations
         request_disability_accommodations: data.request_disability_accommodations,
+        disability_prevents_english: data.disability_prevents_english,
 
         // ═══════════════════════════════════════════════════════════════
         // PART 4: CONTACT INFORMATION
@@ -1294,6 +1583,8 @@ export default function N400Form() {
         city: data.city,
         state: data.state,
         zip_code: data.zip_code,
+        residence_province: data.residence_province,
+        residence_postal_code: data.residence_postal_code,
         residence_from: data.residence_from,
       residence_to: data.residence_to,
       residence_addresses: data.residence_addresses ? JSON.stringify(data.residence_addresses) : undefined,
@@ -1307,6 +1598,9 @@ export default function N400Form() {
           mailing_city: data.mailing_city,
           mailing_state: data.mailing_state,
           mailing_zip_code: data.mailing_zip_code,
+          mailing_province: data.mailing_province,
+          mailing_postal_code: data.mailing_postal_code,
+          mailing_country: data.mailing_country,
         }),
 
         // ═══════════════════════════════════════════════════════════════
@@ -1465,6 +1759,49 @@ export default function N400Form() {
       // Additional Information
       additional_information: data.additional_information ? JSON.stringify(data.additional_information) : undefined,
 
+      // ═══════════════════════════════════════════════════════════════
+      // PART 10: FEE REDUCTION
+      // ═══════════════════════════════════════════════════════════════
+      fee_reduction_requested: data.fee_reduction_requested,
+      household_income: data.household_income,
+      household_size: data.household_size,
+      household_income_earners: data.household_income_earners,
+      is_head_of_household: data.is_head_of_household,
+      head_of_household_name: data.head_of_household_name,
+
+      // ═══════════════════════════════════════════════════════════════
+      // PART 11: APPLICANT SIGNATURE
+      // ═══════════════════════════════════════════════════════════════
+      applicant_signature: data.applicant_signature,
+      signature_date: data.signature_date,
+
+      // ═══════════════════════════════════════════════════════════════
+      // PART 12: INTERPRETER
+      // ═══════════════════════════════════════════════════════════════
+      used_interpreter: data.used_interpreter,
+      interpreter_first_name: data.interpreter_first_name,
+      interpreter_last_name: data.interpreter_last_name,
+      interpreter_business_name: data.interpreter_business_name,
+      interpreter_phone: data.interpreter_phone,
+      interpreter_mobile: data.interpreter_mobile,
+      interpreter_email: data.interpreter_email,
+      interpreter_language: data.interpreter_language,
+      interpreter_signature: data.interpreter_signature,
+      interpreter_signature_date: data.interpreter_signature_date,
+
+      // ═══════════════════════════════════════════════════════════════
+      // PART 13: PREPARER
+      // ═══════════════════════════════════════════════════════════════
+      used_preparer: data.used_preparer,
+      preparer_first_name: data.preparer_first_name,
+      preparer_last_name: data.preparer_last_name,
+      preparer_business_name: data.preparer_business_name,
+      preparer_phone: data.preparer_phone,
+      preparer_mobile: data.preparer_mobile,
+      preparer_email: data.preparer_email,
+      preparer_signature: data.preparer_signature,
+      preparer_signature_date: data.preparer_signature_date,
+
       // Draft metadata
       current_step: currentStep,
     }
@@ -1536,26 +1873,56 @@ export default function N400Form() {
       return;
     }
 
+    // Only allow submission if payment is confirmed
+    if (paymentStatus !== "paid") {
+      setAuthError("Please complete payment first.");
+      return;
+    }
+
+    // Validate all required fields before submission
+    const validationResult = await trigger();
+    if (!validationResult) {
+      const errors = formState.errors;
+      const errorMessages: string[] = [];
+      
+      Object.entries(errors).forEach(([fieldName, error]) => {
+        if (error?.message) {
+          errorMessages.push(`${fieldName}: ${error.message}`);
+        }
+      });
+
+      if (errorMessages.length > 0) {
+        setShowValidationModal(true);
+        setValidationMessages(errorMessages);
+        setAuthError("Please fill in all required fields before submitting.");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
-      const payload = buildFormPayload({ data })
+      const payload = buildFormPayload({ data });
+      
+      // Finalize submission
       const result = await submitN400Form(payload, session.access_token);
-
+      
       if (!result.success || !result.data) {
         if (result.error) setAuthError(result.error);
         return;
       }
 
-      const newId = result.data.id || null
-      setSubmittedId(newId);
-      setCurrentStep(13);
-
-      // Automatically generate and download PDF after successful submission
-      if (newId) {
-        await handleDownloadPDF(newId)
+      setIsFormSubmitted(true);
+      
+      // Generate PDF
+      if (submittedId) {
+        await handleDownloadPDF(submittedId);
+        
+        // Redirect to success page after PDF generation
+        router.push(`/form/success?formId=${submittedId}`);
       }
     } catch (error) {
       console.error("Submission error:", error);
+      setAuthError("An error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -1641,6 +2008,7 @@ export default function N400Form() {
         return;
       }
 
+      // Read the response blob once and create download
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1650,23 +2018,8 @@ export default function N400Form() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `N-400_${watchedData.last_name}_${watchedData.first_name}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        setAuthError(errorData.error || "Failed to generate PDF. Please try again.");
-      }
     } catch (error) {
       console.error("Download error:", error);
-      setAuthError("Unable to generate your PDF. Please check your connection and try again.");
       setAuthError("Failed to download PDF. Please try again.");
     } finally {
       setIsDownloading(false);
@@ -1839,7 +2192,7 @@ export default function N400Form() {
           <label className="form-label" style={{ display: "flex", alignItems: "center", flex: 1 }}>
             {finalLabel}
             {finalTooltip && <InfoIcon tooltip={finalTooltip} />}
-          </label>
+      </label>
           {showReviewLater && (
             <label className={`review-later-toggle ${isFlagged ? 'is-flagged' : ''}`}>
               <input
@@ -1852,8 +2205,8 @@ export default function N400Form() {
           )}
         </div>
         {renderQuestionGuidance(metaId)}
-        <div className="radio-group">
-          <div className="radio-option">
+      <div className="radio-group">
+        <div className="radio-option">
             <input
               type="radio"
               id={`${name}-yes`}
@@ -1866,9 +2219,9 @@ export default function N400Form() {
                 }
               })}
             />
-            <label htmlFor={`${name}-yes`} className="radio-label">Yes</label>
-          </div>
-          <div className="radio-option">
+          <label htmlFor={`${name}-yes`} className="radio-label">Yes</label>
+        </div>
+        <div className="radio-option">
             <input
               type="radio"
               id={`${name}-no`}
@@ -1879,9 +2232,9 @@ export default function N400Form() {
                 }
               })}
             />
-            <label htmlFor={`${name}-no`} className="radio-label">No</label>
-          </div>
+          <label htmlFor={`${name}-no`} className="radio-label">No</label>
         </div>
+      </div>
         {/* Explanation Required Notice */}
         {shouldShowPrompt && (
           <div className="explanation-notice">
@@ -1907,9 +2260,9 @@ export default function N400Form() {
             </div>
           </div>
         )}
-        {errors[name] && <p className="error-message">{errors[name]?.message}</p>}
-      </div>
-    );
+      {errors[name] && <p className="error-message">{errors[name]?.message}</p>}
+    </div>
+  );
   };
 
   const GuidedPanel = ({ title, items }: { title: string; items: string[] }) => (
@@ -2310,13 +2663,13 @@ export default function N400Form() {
             />
           ) : (
             <>
-              {currentStepData.part && (
-                <div className="section-label">{currentStepData.part} • {currentStepData.section}</div>
-              )}
-              {!currentStepData.part && (
-                <div className="section-label">{currentStepData.section}</div>
-              )}
-              <h1>{currentStepData.title}</h1>
+          {currentStepData.part && (
+            <div className="section-label">{currentStepData.part} • {currentStepData.section}</div>
+          )}
+          {!currentStepData.part && (
+            <div className="section-label">{currentStepData.section}</div>
+          )}
+          <h1>{currentStepData.title}</h1>
             </>
           )}
 
@@ -2415,43 +2768,43 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Your Name</div>
 
-                  {/* Item 1: Current Legal Name */}
-                  <div className="form-group">
-                    <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                {/* Item 1: Current Legal Name */}
+                <div className="form-group">
+                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
                       Your Current Legal Name
-                      <InfoIcon tooltip="Do not provide a nickname" />
-                    </label>
-                    <div className="form-row-thirds">
-                      <div>
+                    <InfoIcon tooltip="Do not provide a nickname" />
+                  </label>
+                  <div className="form-row-thirds">
+                    <div>
                         <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>Family name (last name)</label>
-                        <input type="text" className="form-input" placeholder="Last Name" {...register("last_name")} />
-                        {errors.last_name && <p className="error-message">{errors.last_name.message}</p>}
-                      </div>
-                      <div>
+                      <input type="text" className="form-input" placeholder="Last Name" {...register("last_name")} />
+                      {errors.last_name && <p className="error-message">{errors.last_name.message}</p>}
+                    </div>
+                    <div>
                         <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>Given name (first name)</label>
-                        <input type="text" className="form-input" placeholder="First Name" {...register("first_name")} />
-                        {errors.first_name && <p className="error-message">{errors.first_name.message}</p>}
-                      </div>
-                      <div>
+                      <input type="text" className="form-input" placeholder="First Name" {...register("first_name")} />
+                      {errors.first_name && <p className="error-message">{errors.first_name.message}</p>}
+                    </div>
+                    <div>
                         <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>Middle name (if any)</label>
-                        <input type="text" className="form-input" placeholder="Middle Name" {...register("middle_name")} />
-                      </div>
+                      <input type="text" className="form-input" placeholder="Middle Name" {...register("middle_name")} />
                     </div>
                   </div>
+                </div>
 
-                  {/* Item 2: Other Names Used */}
-                  <YesNoField
-                    name="has_used_other_names"
+                {/* Item 2: Other Names Used */}
+                <YesNoField 
+                  name="has_used_other_names" 
                     metaId="has_used_other_names"
                     label="Have you used other names since birth?"
                     tooltip="Include all names you have used, including maiden names, previous married names, aliases, or any other names used in official documents."
-                  />
-
-                  {watchedData.has_used_other_names === "yes" && (
+                />
+                
+                {watchedData.has_used_other_names === "yes" && (
                     <div style={{ marginTop: "16px", padding: "20px", background: "var(--bg)", borderRadius: "12px" }}>
                       <p className="helper-text" style={{ marginBottom: "16px", marginTop: 0 }}>Provide all other names you have used:</p>
-
-                      {otherNamesFields.length === 0 && (
+                    
+                    {otherNamesFields.length === 0 && (
                         <button
                           type="button"
                           onClick={() => appendOtherName({ family_name: "", given_name: "", middle_name: "" })}
@@ -2460,122 +2813,122 @@ export default function N400Form() {
                         >
                           + Add Other Name
                         </button>
-                      )}
+                    )}
 
-                      {otherNamesFields.map((field, index) => (
+                    {otherNamesFields.map((field, index) => (
                         <div key={field.id} style={{ marginBottom: "16px", padding: "16px", background: "white", borderRadius: "10px", border: "1px solid var(--light-gray)" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                             <span style={{ fontSize: "14px", fontWeight: "500" }}>Name {index + 1}</span>
-                            <button
-                              type="button"
-                              onClick={() => removeOtherName(index)}
-                              style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                          <div className="form-row-thirds">
-                            <div>
+                          <button
+                            type="button"
+                            onClick={() => removeOtherName(index)}
+                            style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <div className="form-row-thirds">
+                    <div>
                               <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>Last Name</label>
-                              <input type="text" className="form-input" placeholder="Last Name" {...register(`other_names.${index}.family_name`)} />
-                            </div>
-                            <div>
-                              <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>First Name</label>
-                              <input type="text" className="form-input" placeholder="First Name" {...register(`other_names.${index}.given_name`)} />
-                            </div>
-                            <div>
-                              <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>Middle Name</label>
-                              <input type="text" className="form-input" placeholder="Middle Name" {...register(`other_names.${index}.middle_name`)} />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                      {otherNamesFields.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => appendOtherName({ family_name: "", given_name: "", middle_name: "" })}
-                          className="save-btn"
-                          style={{ padding: "10px 18px", fontSize: "14px", marginTop: "8px" }}
-                        >
-                          + Add Another Name
-                        </button>
-                      )}
+                            <input type="text" className="form-input" placeholder="Last Name" {...register(`other_names.${index}.family_name`)} />
                     </div>
-                  )}
-
-                  {/* Item 3: Name Change */}
-                  <YesNoField name="wants_name_change" metaId="wants_name_change" label="Would you like to legally change your name?" />
-
-                  {watchedData.wants_name_change === "yes" && (
-                    <div style={{ marginTop: "16px", padding: "20px", background: "var(--bg)", borderRadius: "12px" }}>
-                      <label className="form-label" style={{ marginBottom: "12px" }}>Enter your new name:</label>
-                      <div className="form-row-thirds">
-                        <div>
-                          <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>New Last Name</label>
-                          <input type="text" className="form-input" placeholder="New Last Name" {...register("new_name_last")} />
-                        </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>New First Name</label>
-                          <input type="text" className="form-input" placeholder="New First Name" {...register("new_name_first")} />
-                        </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>New Middle Name</label>
-                          <input type="text" className="form-input" placeholder="New Middle Name" {...register("new_name_middle")} />
+                          <div>
+                              <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>First Name</label>
+                            <input type="text" className="form-input" placeholder="First Name" {...register(`other_names.${index}.given_name`)} />
+                  </div>
+                          <div>
+                              <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>Middle Name</label>
+                            <input type="text" className="form-input" placeholder="Middle Name" {...register(`other_names.${index}.middle_name`)} />
+                </div>
                         </div>
                       </div>
+                    ))}
+
+                    {otherNamesFields.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => appendOtherName({ family_name: "", given_name: "", middle_name: "" })}
+                        className="save-btn"
+                          style={{ padding: "10px 18px", fontSize: "14px", marginTop: "8px" }}
+                      >
+                        + Add Another Name
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Item 3: Name Change */}
+                  <YesNoField name="wants_name_change" metaId="wants_name_change" label="Would you like to legally change your name?" />
+                
+                {watchedData.wants_name_change === "yes" && (
+                    <div style={{ marginTop: "16px", padding: "20px", background: "var(--bg)", borderRadius: "12px" }}>
+                      <label className="form-label" style={{ marginBottom: "12px" }}>Enter your new name:</label>
+                    <div className="form-row-thirds">
+                      <div>
+                          <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>New Last Name</label>
+                        <input type="text" className="form-input" placeholder="New Last Name" {...register("new_name_last")} />
+                      </div>
+                      <div>
+                          <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>New First Name</label>
+                        <input type="text" className="form-input" placeholder="New First Name" {...register("new_name_first")} />
+                      </div>
+                      <div>
+                          <label className="form-label" style={{ fontSize: "13px", marginBottom: "4px", color: "var(--gray)" }}>New Middle Name</label>
+                        <input type="text" className="form-input" placeholder="New Middle Name" {...register("new_name_middle")} />
+                      </div>
                     </div>
-                  )}
+                  </div>
+                )}
                 </div>
 
                 {/* CARD 2: Personal Details */}
                 <div className="question-card">
                   <div className="question-card-title">Personal Details</div>
 
-                  {/* Item 4: USCIS Online Account Number */}
-                  <div className="form-group">
+                {/* Item 4: USCIS Online Account Number */}
+                <div className="form-group">
                     <label className="form-label">{labelFor("uscis_account_number", "USCIS Online Account Number")}</label>
                     {renderQuestionGuidance("uscis_account_number")}
                     <input type="text" className="form-input" placeholder="12-digit number" style={{ maxWidth: "220px" }} {...register("uscis_account_number")} />
-                  </div>
+                </div>
 
-                  {/* Item 5: Sex */}
-                  <div className="form-group">
+                {/* Item 5: Sex */}
+                <div className="form-group">
                     <label className="form-label">{labelFor("gender", "Sex")}</label>
                     {renderQuestionGuidance("gender")}
-                    <div className="radio-group">
-                      <div className="radio-option">
-                        <input type="radio" id="gender-male" value="male" {...register("gender")} />
-                        <label htmlFor="gender-male" className="radio-label">Male</label>
-                      </div>
-                      <div className="radio-option">
-                        <input type="radio" id="gender-female" value="female" {...register("gender")} />
-                        <label htmlFor="gender-female" className="radio-label">Female</label>
-                      </div>
+                  <div className="radio-group">
+                    <div className="radio-option">
+                      <input type="radio" id="gender-male" value="male" {...register("gender")} />
+                      <label htmlFor="gender-male" className="radio-label">Male</label>
                     </div>
-                    {errors.gender && <p className="error-message">{errors.gender.message}</p>}
+                    <div className="radio-option">
+                      <input type="radio" id="gender-female" value="female" {...register("gender")} />
+                      <label htmlFor="gender-female" className="radio-label">Female</label>
+                    </div>
                   </div>
+                  {errors.gender && <p className="error-message">{errors.gender.message}</p>}
+                </div>
 
-                  {/* Item 6: Date of Birth */}
-                  <div className="form-group">
-                    <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                {/* Item 6: Date of Birth */}
+                <div className="form-group">
+                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
                       {labelFor("date_of_birth", "Date of Birth")}
                       <InfoIcon tooltip="Use the format MM/DD/YYYY" />
-                    </label>
+                  </label>
                     {renderQuestionGuidance("date_of_birth")}
                     <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "180px" }} {...register("date_of_birth")} />
-                    {errors.date_of_birth && <p className="error-message">{errors.date_of_birth.message}</p>}
-                  </div>
+                  {errors.date_of_birth && <p className="error-message">{errors.date_of_birth.message}</p>}
+                </div>
 
-                  {/* Item 7: Date Became Permanent Resident */}
+                {/* Item 7: Date Became Permanent Resident */}
                   <div className="form-group">
-                    <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
                       {labelFor("date_became_permanent_resident", "Permanent Resident Since")}
                       <InfoIcon tooltip="Found on your green card as 'Resident Since'" />
-                    </label>
+                  </label>
                     {renderQuestionGuidance("date_became_permanent_resident")}
                     <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "180px" }} {...register("date_became_permanent_resident")} />
-                    {errors.date_became_permanent_resident && <p className="error-message">{errors.date_became_permanent_resident.message}</p>}
+                  {errors.date_became_permanent_resident && <p className="error-message">{errors.date_became_permanent_resident.message}</p>}
                   </div>
                 </div>
 
@@ -2583,8 +2936,8 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Country of Origin</div>
 
-                  {/* Item 8: Country of Birth */}
-                  <div className="form-group">
+                {/* Item 8: Country of Birth */}
+                <div className="form-group">
                     <label className="form-label">{labelFor("country_of_birth", "Country of Birth")}</label>
                     {renderQuestionGuidance("country_of_birth")}
                     <select className="form-select" {...register("country_of_birth")}>
@@ -2594,12 +2947,12 @@ export default function N400Form() {
                     {errors.country_of_birth && <p className="error-message">{errors.country_of_birth.message}</p>}
                   </div>
 
-                  {/* Item 9: Country of Citizenship */}
+                {/* Item 9: Country of Citizenship */}
                   <div className="form-group">
-                    <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                  <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
                       {labelFor("country_of_citizenship", "Country of Citizenship or Nationality")}
                       <InfoIcon tooltip="If you are a citizen of more than one country, list others in Part 14." />
-                    </label>
+                  </label>
                     {renderQuestionGuidance("country_of_citizenship")}
                     <select className="form-select" {...register("country_of_citizenship")}>
                       <option value="">Select...</option>
@@ -2607,49 +2960,60 @@ export default function N400Form() {
                     </select>
                     {errors.country_of_citizenship && <p className="error-message">{errors.country_of_citizenship.message}</p>}
                   </div>
-                </div>
+                  </div>
 
                 {/* CARD 4: Additional Questions */}
                 <div className="question-card">
                   <div className="question-card-title">Additional Questions</div>
 
-                  {/* Item 10: Parent U.S. Citizen */}
-                  <YesNoField
-                    name="parent_us_citizen_before_18"
+                {/* Item 10: Parent U.S. Citizen */}
+                <YesNoField 
+                  name="parent_us_citizen_before_18" 
                     metaId="parent_us_citizen_before_18"
                     label="Was your parent a U.S. citizen before your 18th birthday?"
                     tooltip="USCIS uses this to determine whether a different process applies."
-                  />
+                />
 
-                  {/* Item 11: Disability Accommodations */}
-                  <YesNoField
-                    name="request_disability_accommodations"
+                {/* Item 11: Disability Accommodations */}
+                <YesNoField 
+                  name="request_disability_accommodations" 
                     metaId="request_disability_accommodations"
                     label="Do you need disability accommodations?"
                     tooltip="For the English language or civics requirements."
-                  />
+                />
 
-                  {/* Item 12: Social Security Update */}
-                  <YesNoField
-                    name="ssa_wants_card"
+                {watchedData.request_disability_accommodations === "yes" && (
+                  <div style={{ marginTop: "16px", padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
+                    <YesNoField 
+                      name="disability_prevents_english" 
+                      metaId="disability_prevents_english"
+                      label="Do you have a physical or developmental disability or mental impairment that prevents you from demonstrating your knowledge and understanding of the English language or civics requirements for naturalization?"
+                      tooltip="If you answered 'Yes,' submit a completed Form N-648, Medical Certification for Disability Exceptions, when you file your Form N-400."
+                    />
+                  </div>
+                )}
+
+                {/* Item 12: Social Security Update */}
+                <YesNoField 
+                  name="ssa_wants_card" 
                     metaId="ssa_wants_card"
                     label="Do you want SSA to issue you a Social Security card?"
                     tooltip="The SSA can issue or update your card when you are naturalized."
-                  />
-
-                  {watchedData.ssa_wants_card === "yes" && (
+                />
+                
+                {watchedData.ssa_wants_card === "yes" && (
                     <div style={{ marginTop: "16px", padding: "20px", background: "var(--bg)", borderRadius: "12px" }}>
                       <div className="form-group" style={{ marginBottom: "20px" }}>
                         <label className="form-label">{labelFor("ssn", "Social Security Number (if any)")}</label>
                         <input type="text" className="form-input" placeholder="XXX-XX-XXXX" style={{ maxWidth: "180px" }} {...register("ssn")} />
-                      </div>
-                      <YesNoField
-                        name="ssa_consent_disclosure"
+                </div>
+                    <YesNoField 
+                      name="ssa_consent_disclosure" 
                         metaId="ssa_consent_disclosure"
                         label="Do you consent to disclosure of information to SSA?"
-                      />
+                    />
                     </div>
-                  )}
+                )}
                 </div>
               </>
             )}
@@ -2663,39 +3027,39 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Ethnicity & Race</div>
 
-                  <div className="form-group">
+                <div className="form-group">
                     <label className="form-label">{labelFor("ethnicity", "Ethnicity")}</label>
                     {renderQuestionGuidance("ethnicity")}
-                    <div className="radio-group">
+                  <div className="radio-group">
                       <div className="radio-option wide">
-                        <input type="radio" id="ethnicity-hispanic" value="hispanic" {...register("ethnicity")} />
-                        <label htmlFor="ethnicity-hispanic" className="radio-label">Hispanic or Latino</label>
-                      </div>
-                      <div className="radio-option wide">
-                        <input type="radio" id="ethnicity-not-hispanic" value="not_hispanic" {...register("ethnicity")} />
-                        <label htmlFor="ethnicity-not-hispanic" className="radio-label">Not Hispanic or Latino</label>
-                      </div>
+                      <input type="radio" id="ethnicity-hispanic" value="hispanic" {...register("ethnicity")} />
+                      <label htmlFor="ethnicity-hispanic" className="radio-label">Hispanic or Latino</label>
                     </div>
-                    {errors.ethnicity && <p className="error-message">{errors.ethnicity.message}</p>}
+                      <div className="radio-option wide">
+                      <input type="radio" id="ethnicity-not-hispanic" value="not_hispanic" {...register("ethnicity")} />
+                      <label htmlFor="ethnicity-not-hispanic" className="radio-label">Not Hispanic or Latino</label>
+                    </div>
                   </div>
+                  {errors.ethnicity && <p className="error-message">{errors.ethnicity.message}</p>}
+                </div>
 
-                  <div className="form-group">
+                <div className="form-group">
                     <label className="form-label">{labelFor("race", "Race")} <span style={{ fontWeight: 400, color: "var(--gray)" }}>(select all that apply)</span></label>
                     {renderQuestionGuidance("race")}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
-                      {RACES.map((race) => (
-                        <label key={race.value} className="checkbox-group">
-                          <input
-                            type="checkbox"
-                            value={race.value}
-                            {...register("race")}
-                            style={{ width: "18px", height: "18px", accentColor: "var(--dark)" }}
-                          />
-                          <span className="checkbox-label">{race.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                    {errors.race && <p className="error-message">{errors.race.message}</p>}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
+                    {RACES.map((race) => (
+                      <label key={race.value} className="checkbox-group">
+                        <input
+                          type="checkbox"
+                          value={race.value}
+                          {...register("race")}
+                          style={{ width: "18px", height: "18px", accentColor: "var(--dark)" }}
+                        />
+                        <span className="checkbox-label">{race.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {errors.race && <p className="error-message">{errors.race.message}</p>}
                   </div>
                 </div>
 
@@ -2703,44 +3067,44 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Physical Characteristics</div>
 
-                  <div className="form-row-equal">
-                    <div className="form-group">
+                <div className="form-row-equal">
+                <div className="form-group">
                       <label className="form-label">{labelFor("height_feet", "Height")}</label>
                       <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                        <input type="number" className="form-input" placeholder="Feet" style={{ maxWidth: "80px" }} {...register("height_feet")} />
+                      <input type="number" className="form-input" placeholder="Feet" style={{ maxWidth: "80px" }} {...register("height_feet")} />
                         <span style={{ color: "var(--gray)" }}>ft</span>
-                        <input type="number" className="form-input" placeholder="Inches" style={{ maxWidth: "80px" }} {...register("height_inches")} />
+                      <input type="number" className="form-input" placeholder="Inches" style={{ maxWidth: "80px" }} {...register("height_inches")} />
                         <span style={{ color: "var(--gray)" }}>in</span>
-                      </div>
-                      {errors.height_feet && <p className="error-message">{errors.height_feet.message}</p>}
-                    </div>
-                    <div className="form-group">
+                </div>
+                    {errors.height_feet && <p className="error-message">{errors.height_feet.message}</p>}
+                  </div>
+                <div className="form-group">
                       <label className="form-label">{labelFor("weight", "Weight")}</label>
                       <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                        <input type="number" className="form-input" placeholder="150" style={{ maxWidth: "100px" }} {...register("weight")} />
+                    <input type="number" className="form-input" placeholder="150" style={{ maxWidth: "100px" }} {...register("weight")} />
                         <span style={{ color: "var(--gray)" }}>lbs</span>
                       </div>
-                      {errors.weight && <p className="error-message">{errors.weight.message}</p>}
-                    </div>
+                    {errors.weight && <p className="error-message">{errors.weight.message}</p>}
                   </div>
+                </div>
 
                   <div className="form-row-equal">
-                    <div className="form-group">
+                <div className="form-group">
                       <label className="form-label">{labelFor("eye_color", "Eye Color")}</label>
-                      <select className="form-select" {...register("eye_color")}>
-                        <option value="">Select...</option>
-                        {EYE_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      {errors.eye_color && <p className="error-message">{errors.eye_color.message}</p>}
-                    </div>
-                    <div className="form-group">
+                  <select className="form-select" {...register("eye_color")}>
+                    <option value="">Select...</option>
+                    {EYE_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  {errors.eye_color && <p className="error-message">{errors.eye_color.message}</p>}
+                </div>
+                <div className="form-group">
                       <label className="form-label">{labelFor("hair_color", "Hair Color")}</label>
-                      <select className="form-select" {...register("hair_color")}>
-                        <option value="">Select...</option>
-                        {HAIR_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      {errors.hair_color && <p className="error-message">{errors.hair_color.message}</p>}
-                    </div>
+                  <select className="form-select" {...register("hair_color")}>
+                    <option value="">Select...</option>
+                    {HAIR_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  {errors.hair_color && <p className="error-message">{errors.hair_color.message}</p>}
+                </div>
                   </div>
                 </div>
               </>
@@ -2754,23 +3118,23 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Contact Information</div>
 
-                  <div className="form-row-equal">
-                    <div className="form-group">
-                      <label className="form-label">{labelFor("daytime_phone", "Daytime Phone Number")}</label>
-                      <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("daytime_phone")} />
-                      {errors.daytime_phone && <p className="error-message">{errors.daytime_phone.message}</p>}
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">{labelFor("mobile_phone", "Mobile Phone (optional)")}</label>
-                      <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("mobile_phone")} />
-                    </div>
-                  </div>
-
+                <div className="form-row-equal">
                   <div className="form-group">
+                      <label className="form-label">{labelFor("daytime_phone", "Daytime Phone Number")}</label>
+                    <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("daytime_phone")} />
+                    {errors.daytime_phone && <p className="error-message">{errors.daytime_phone.message}</p>}
+                  </div>
+                  <div className="form-group">
+                      <label className="form-label">{labelFor("mobile_phone", "Mobile Phone (optional)")}</label>
+                    <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("mobile_phone")} />
+                  </div>
+                </div>
+
+                <div className="form-group">
                     <label className="form-label">{labelFor("email", "Email Address (optional)")}</label>
                     <input type="email" className="form-input" placeholder="you@example.com" style={{ maxWidth: "320px" }} {...register("email")} />
-                    <p className="helper-text">USCIS may contact you at this email address</p>
-                    {errors.email && <p className="error-message">{errors.email.message}</p>}
+                  <p className="helper-text">USCIS may contact you at this email address</p>
+                  {errors.email && <p className="error-message">{errors.email.message}</p>}
                   </div>
                 </div>
               </>
@@ -2785,42 +3149,52 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Current Physical Address</div>
 
-                  <div className="form-group">
+                <div className="form-group">
                     <label className="form-label">Street Address</label>
                     <div className="form-row" style={{ gridTemplateColumns: "1fr 120px", gap: "12px" }}>
                       <input type="text" className="form-input" placeholder="Street Number and Name" {...register("street_address")} />
-                      <input type="text" className="form-input" placeholder="Apt/Ste/Flr" {...register("apt_ste_flr")} />
-                    </div>
-                    {errors.street_address && <p className="error-message">{errors.street_address.message}</p>}
+                    <input type="text" className="form-input" placeholder="Apt/Ste/Flr" {...register("apt_ste_flr")} />
+                  </div>
+                  {errors.street_address && <p className="error-message">{errors.street_address.message}</p>}
                   </div>
 
                   <div className="form-row-thirds">
-                    <div className="form-group">
+                  <div className="form-group">
                       <label className="form-label">City or Town</label>
-                      <input type="text" className="form-input" placeholder="City" {...register("city")} />
-                      {errors.city && <p className="error-message">{errors.city.message}</p>}
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">State</label>
-                      <select className="form-select" {...register("state")}>
-                        <option value="">Select...</option>
-                        {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                      {errors.state && <p className="error-message">{errors.state.message}</p>}
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">ZIP Code</label>
-                      <input type="text" className="form-input" placeholder="ZIP" {...register("zip_code")} />
-                      {errors.zip_code && <p className="error-message">{errors.zip_code.message}</p>}
-                    </div>
+                    <input type="text" className="form-input" placeholder="City" {...register("city")} />
+                    {errors.city && <p className="error-message">{errors.city.message}</p>}
                   </div>
+                  <div className="form-group">
+                      <label className="form-label">State / Province</label>
+                    <select className="form-select" {...register("state")}>
+                      <option value="">Select...</option>
+                      {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    {errors.state && <p className="error-message">{errors.state.message}</p>}
+                  </div>
+                  <div className="form-group">
+                      <label className="form-label">ZIP Code / Postal Code</label>
+                        <input type="text" className="form-input" placeholder="ZIP" {...register("zip_code")} />
+                    {errors.zip_code && <p className="error-message">{errors.zip_code.message}</p>}
+                  </div>
+                </div>
+                <div className="form-row-halves" style={{ marginTop: "12px" }}>
+                  <div className="form-group">
+                    <label className="form-label">Province (if outside US)</label>
+                    <input type="text" className="form-input" placeholder="Province" {...register("residence_province")} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Postal Code (if outside US)</label>
+                    <input type="text" className="form-input" placeholder="Postal Code" {...register("residence_postal_code")} />
+                  </div>
+                </div>
 
                   <div className="form-row-equal">
-                    <div className="form-group">
+                <div className="form-group">
                       <label className="form-label">Living here since</label>
-                      <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "150px" }} {...register("residence_from")} />
-                    </div>
-                    <div className="form-group">
+                        <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "150px" }} {...register("residence_from")} />
+                      </div>
+                      <div className="form-group">
                       <label className="form-label">Until</label>
                       <input type="text" className="form-input" placeholder="PRESENT" style={{ maxWidth: "150px" }} {...register("residence_to")} />
                     </div>
@@ -2833,14 +3207,14 @@ export default function N400Form() {
 
                   <YesNoField name="mailing_same_as_residence" metaId="mailing_same_as_residence" label="Is your mailing address the same as above?" />
 
-                  {watchedData.mailing_same_as_residence === "no" && (
+                {watchedData.mailing_same_as_residence === "no" && (
                     <div style={{ marginTop: "20px", padding: "20px", background: "var(--bg)", borderRadius: "12px" }}>
-                      <div className="form-group">
+                    <div className="form-group">
                         <label className="form-label">Street Address</label>
                         <div className="form-row" style={{ gridTemplateColumns: "1fr 120px", gap: "12px" }}>
-                          <input type="text" className="form-input" placeholder="Street Address" {...register("mailing_street_address")} />
+                      <input type="text" className="form-input" placeholder="Street Address" {...register("mailing_street_address")} />
                           <input type="text" className="form-input" placeholder="Apt/Ste/Flr" {...register("mailing_apt_ste_flr")} />
-                        </div>
+                    </div>
                       </div>
                       <div className="form-group">
                         <label className="form-label">In Care Of (if any)</label>
@@ -2849,22 +3223,22 @@ export default function N400Form() {
                       <div className="form-row-thirds">
                         <div className="form-group">
                           <label className="form-label">City</label>
-                          <input type="text" className="form-input" placeholder="City" {...register("mailing_city")} />
+                      <input type="text" className="form-input" placeholder="City" {...register("mailing_city")} />
                         </div>
                         <div className="form-group">
                           <label className="form-label">State</label>
-                          <select className="form-select" {...register("mailing_state")}>
+                      <select className="form-select" {...register("mailing_state")}>
                             <option value="">Select...</option>
-                            {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
+                        {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
                         </div>
                         <div className="form-group">
                           <label className="form-label">ZIP Code</label>
-                          <input type="text" className="form-input" placeholder="ZIP" {...register("mailing_zip_code")} />
-                        </div>
+                      <input type="text" className="form-input" placeholder="ZIP" {...register("mailing_zip_code")} />
                       </div>
                     </div>
-                  )}
+                  </div>
+                )}
                 </div>
               </>
             )}
@@ -2878,24 +3252,24 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Employment & School History</div>
 
-                  <p className="helper-text" style={{ marginBottom: "24px" }}>
+                <p className="helper-text" style={{ marginBottom: "24px" }}>
                     {watchedData.eligibility_basis === "5year" || watchedData.eligibility_basis === "3year_marriage" ? (
-                      <>List where you have worked or attended school full time or part time during the last <strong>5 years</strong> if you are filing based on the general provision under Part 1., Item Number 1.a.</>
+                    <>List where you have worked or attended school full time or part time during the last <strong>5 years</strong> if you are filing based on the general provision under Part 1., Item Number 1.a.</>
                     ) : watchedData.eligibility_basis === "military_current" || watchedData.eligibility_basis === "military_former" ? (
-                      <>List where you have worked or attended school full time or part time during the last <strong>5 years</strong>.</>
-                    ) : watchedData.eligibility_basis === "qualified_employment" ? (
-                      <>List where you have worked or attended school full time or part time during the last <strong>3 years</strong> if you are filing under INA section 319(b).</>
-                    ) : (
-                      <>List where you have worked or attended school full time or part time during the applicable period. See Part 7. in the Specific Instructions by Item Number section of the Instructions for the applicable period of time for which you must enter this information.</>
+                    <>List where you have worked or attended school full time or part time during the last <strong>5 years</strong>.</>
+                  ) : watchedData.eligibility_basis === "qualified_employment" ? (
+                    <>List where you have worked or attended school full time or part time during the last <strong>3 years</strong> if you are filing under INA section 319(b).</>
+                  ) : (
+                    <>List where you have worked or attended school full time or part time during the applicable period. See Part 7. in the Specific Instructions by Item Number section of the Instructions for the applicable period of time for which you must enter this information.</>
                     )} Provide information for the complete time period for all employment, including foreign government employment such as military, police, and intelligence services.
-                  </p>
+                </p>
 
-                  {/* Employment History */}
-                  <div className="form-group">
-                    <label className="form-label">1. Employment and School History</label>
-                    <p className="helper-text" style={{ marginBottom: "16px", marginTop: "8px" }}>
-                      Begin by providing information about your most recent or current employment, studies, or unemployment. If you worked for yourself, type "self-employed". If you were unemployed, type "unemployed." If you are retired, type "retired."
-                    </p>
+                {/* Employment History */}
+                <div className="form-group">
+                  <label className="form-label">1. Employment and School History</label>
+                  <p className="helper-text" style={{ marginBottom: "16px", marginTop: "8px" }}>
+                    Begin by providing information about your most recent or current employment, studies, or unemployment. If you worked for yourself, type "self-employed". If you were unemployed, type "unemployed." If you are retired, type "retired."
+                  </p>
                   
                   {/* Employment Table */}
                   <div style={{ marginTop: "16px" }}>
@@ -3036,7 +3410,7 @@ export default function N400Form() {
                     )}
                   </div>
                 </div>
-              </div>
+                </div>
               </>
             )}
 
@@ -3049,98 +3423,98 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Travel History</div>
 
-                  <p className="helper-text" style={{ marginBottom: "24px" }}>
+                <p className="helper-text" style={{ marginBottom: "24px" }}>
                     {watchedData.eligibility_basis === "5year" || watchedData.eligibility_basis === "3year_marriage" ? (
                       <>List below all the trips that you have taken outside the United States during the last <strong>5 years</strong>.</>
                     ) : watchedData.eligibility_basis === "military_current" || watchedData.eligibility_basis === "military_former" ? (
-                      <>List below all the trips that you have taken outside the United States during the last <strong>5 years</strong>.</>
-                    ) : watchedData.eligibility_basis === "qualified_employment" ? (
-                      <>List below all the trips that you have taken outside the United States during the last <strong>3 years</strong> if you are filing under INA section 319(b).</>
-                    ) : (
+                    <>List below all the trips that you have taken outside the United States during the last <strong>5 years</strong>.</>
+                  ) : watchedData.eligibility_basis === "qualified_employment" ? (
+                    <>List below all the trips that you have taken outside the United States during the last <strong>3 years</strong> if you are filing under INA section 319(b).</>
+                  ) : (
                       <>List below all the trips that you have taken outside the United States during the applicable period.</>
                     )} Start with your most recent trip and work backwards. Do not include day trips (where the entire trip was completed within 24 hours).
-                  </p>
+                </p>
 
                   {/* Trip Details */}
-                  <div className="form-group">
-                    <label className="form-label">1. Trip Details</label>
-                    <p className="helper-text" style={{ marginBottom: "12px" }}>
-                      Start with your most recent trip and work backwards. If you need extra space, use Part 14. Additional Information.
-                    </p>
+                <div className="form-group">
+                  <label className="form-label">1. Trip Details</label>
+                  <p className="helper-text" style={{ marginBottom: "12px" }}>
+                    Start with your most recent trip and work backwards. If you need extra space, use Part 14. Additional Information.
+                  </p>
+                  
+                  {tripFields.length === 0 && (
+                    <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginBottom: "16px" }}>
+                      <p style={{ fontSize: "14px", color: "var(--gray)", marginBottom: "12px" }}>No trips added yet. Click "Add Trip" to begin.</p>
+                      <button
+                        type="button"
+                        onClick={() => appendTrip({ date_left_us: "", date_returned_us: "", countries_traveled: "" })}
+                        className="save-btn"
+                        style={{ padding: "8px 16px", fontSize: "14px" }}
+                      >
+                        + Add Trip
+                      </button>
+                    </div>
+                  )}
 
-                    {tripFields.length === 0 && (
-                      <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginBottom: "16px" }}>
-                        <p style={{ fontSize: "14px", color: "var(--gray)", marginBottom: "12px" }}>No trips added yet. Click "Add Trip" to begin.</p>
-                        <button
-                          type="button"
-                          onClick={() => appendTrip({ date_left_us: "", date_returned_us: "", countries_traveled: "" })}
-                          className="save-btn"
-                          style={{ padding: "8px 16px", fontSize: "14px" }}
-                        >
-                          + Add Trip
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Display trips */}
-                    {tripFields.length > 0 && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                        {tripFields.map((field, index) => (
-                          <div key={field.id} style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                              <h4 style={{ fontSize: "16px", fontWeight: "600" }}>Trip {index + 1}</h4>
-                              <button
-                                type="button"
-                                onClick={() => removeTrip(index)}
-                                style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                  {/* Display trips */}
+                  {tripFields.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                      {tripFields.map((field, index) => (
+                        <div key={field.id} style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                            <h4 style={{ fontSize: "16px", fontWeight: "600" }}>Trip {index + 1}</h4>
+                            <button
+                              type="button"
+                              onClick={() => removeTrip(index)}
+                              style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                          <div className="form-row-equal">
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: "14px" }}>Date You Left the United States (mm/dd/yyyy)</label>
+                              <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`trips.${index}.date_left_us`)} />
                             </div>
-                            <div className="form-row-equal">
-                              <div className="form-group">
-                                <label className="form-label" style={{ fontSize: "14px" }}>Date You Left the United States (mm/dd/yyyy)</label>
-                                <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`trips.${index}.date_left_us`)} />
-                              </div>
-                              <div className="form-group">
-                                <label className="form-label" style={{ fontSize: "14px" }}>Date You Returned to the United States (mm/dd/yyyy)</label>
-                                <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`trips.${index}.date_returned_us`)} />
-                              </div>
-                            </div>
-                            <div className="form-group" style={{ marginTop: "12px" }}>
-                              <label className="form-label" style={{ fontSize: "14px" }}>Countries to Which You Traveled</label>
-                              <input type="text" className="form-input" placeholder="List all countries visited" {...register(`trips.${index}.countries_traveled`)} />
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: "14px" }}>Date You Returned to the United States (mm/dd/yyyy)</label>
+                              <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`trips.${index}.date_returned_us`)} />
                             </div>
                           </div>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => appendTrip({ date_left_us: "", date_returned_us: "", countries_traveled: "" })}
-                          className="save-btn"
-                          style={{ padding: "8px 16px", fontSize: "14px", alignSelf: "flex-start" }}
-                        >
-                          + Add Another Trip
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                          <div className="form-group" style={{ marginTop: "12px" }}>
+                            <label className="form-label" style={{ fontSize: "14px" }}>Countries to Which You Traveled</label>
+                            <input type="text" className="form-input" placeholder="List all countries visited" {...register(`trips.${index}.countries_traveled`)} />
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => appendTrip({ date_left_us: "", date_returned_us: "", countries_traveled: "" })}
+                        className="save-btn"
+                        style={{ padding: "8px 16px", fontSize: "14px", alignSelf: "flex-start" }}
+                      >
+                        + Add Another Trip
+                      </button>
+                    </div>
+                  )}
+                </div>
 
-                  <div className="form-group" style={{ marginTop: "24px" }}>
+                <div className="form-group" style={{ marginTop: "24px" }}>
                     <label className="form-label">{labelFor("total_days_outside_us", "Total Days Outside United States")}</label>
                     {renderQuestionGuidance("total_days_outside_us")}
-                    <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "120px" }} {...register("total_days_outside_us")} />
-                    <p className="helper-text" style={{ marginTop: "4px" }}>Add up all the days from all your trips</p>
-                  </div>
+                  <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "120px" }} {...register("total_days_outside_us")} />
+                  <p className="helper-text" style={{ marginTop: "4px" }}>Add up all the days from all your trips</p>
+                </div>
 
                   <YesNoField name="trips_over_6_months" metaId="trips_over_6_months" label="Have you taken any trip outside the United States that lasted more than 6 months?" />
 
-                  {watchedData.trips_over_6_months === "yes" && (
-                    <div style={{ marginTop: "16px", padding: "16px", background: "#FEF3C7", borderRadius: "8px", border: "1px solid #F59E0B" }}>
-                      <p style={{ color: "#92400E", fontSize: "14px" }}>
+                {watchedData.trips_over_6_months === "yes" && (
+                  <div style={{ marginTop: "16px", padding: "16px", background: "#FEF3C7", borderRadius: "8px", border: "1px solid #F59E0B" }}>
+                    <p style={{ color: "#92400E", fontSize: "14px" }}>
                         USCIS reviews continuous residence for trips of 6 months or more. See the Required Evidence - Continuous Residence section of the Instructions for details.
-                      </p>
-                    </div>
-                  )}
+                    </p>
+                  </div>
+                )}
                 </div>
               </>
             )}
@@ -3154,146 +3528,146 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Marital Status</div>
 
-                  {/* Item 1: Current Marital Status */}
-                  <div className="form-group">
+                {/* Item 1: Current Marital Status */}
+                <div className="form-group">
                     <label className="form-label">1. {labelFor("marital_status", "What is your current marital status?")}</label>
                     {renderQuestionGuidance("marital_status")}
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
-                      {[
-                        { value: "single", label: "Single, Never Married" },
-                        { value: "married", label: "Married" },
-                        { value: "divorced", label: "Divorced" },
-                        { value: "widowed", label: "Widowed" },
-                        { value: "separated", label: "Separated" },
-                        { value: "annulled", label: "Marriage Annulled" }
-                      ].map(status => (
-                        <label key={status.value} className="radio-option" style={{ flex: "0 0 auto" }}>
-                          <input type="radio" value={status.value} {...register("marital_status")} />
-                          <span className="radio-label" style={{ padding: "10px 20px" }}>{status.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                    {errors.marital_status && <p className="error-message">{errors.marital_status.message}</p>}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
+                    {[
+                      { value: "single", label: "Single, Never Married" },
+                      { value: "married", label: "Married" },
+                      { value: "divorced", label: "Divorced" },
+                      { value: "widowed", label: "Widowed" },
+                      { value: "separated", label: "Separated" },
+                      { value: "annulled", label: "Marriage Annulled" }
+                    ].map(status => (
+                      <label key={status.value} className="radio-option" style={{ flex: "0 0 auto" }}>
+                        <input type="radio" value={status.value} {...register("marital_status")} />
+                        <span className="radio-label" style={{ padding: "10px 20px" }}>{status.label}</span>
+                      </label>
+                    ))}
                   </div>
+                  {errors.marital_status && <p className="error-message">{errors.marital_status.message}</p>}
+                </div>
 
-                  {watchedData.marital_status === "single" && (
-                    <p className="helper-text" style={{ marginTop: "-10px" }}>If you are single and have never married, go to Part 6. Information About Your Children.</p>
-                  )}
+                {watchedData.marital_status === "single" && (
+                  <p className="helper-text" style={{ marginTop: "-10px" }}>If you are single and have never married, go to Part 6. Information About Your Children.</p>
+                )}
 
-                  {watchedData.marital_status && watchedData.marital_status !== "single" && (
-                    <>
-                      {/* Item 2: Spouse Military Member (only if married) */}
-                      {watchedData.marital_status === "married" && (
+                {watchedData.marital_status && watchedData.marital_status !== "single" && (
+                  <>
+                    {/* Item 2: Spouse Military Member (only if married) */}
+                    {watchedData.marital_status === "married" && (
                         <YesNoField name="spouse_is_military_member" metaId="spouse_is_military_member" label="2. If you are currently married, is your spouse a current member of the U.S. armed forces?" />
-                      )}
+                    )}
 
-                      {/* Item 3: Times Married */}
-                      <div className="form-group">
+                    {/* Item 3: Times Married */}
+                  <div className="form-group">
                         <label className="form-label">3. {labelFor("times_married", "How many times have you been married?")}</label>
                         {renderQuestionGuidance("times_married")}
-                        <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("times_married")} />
-                        <p className="helper-text" style={{ marginTop: "4px" }}>Provide current marriage certificate and any divorce decree, annulment decree, or death certificate showing that your prior marriages were terminated (if applicable).</p>
+                      <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("times_married")} />
+                      <p className="helper-text" style={{ marginTop: "4px" }}>Provide current marriage certificate and any divorce decree, annulment decree, or death certificate showing that your prior marriages were terminated (if applicable).</p>
                       </div>
                     </>
                   )}
-                </div>
+                    </div>
 
                 {/* Card: Spouse Information (conditional) */}
-                {(watchedData.marital_status === "married" || watchedData.eligibility_basis === "3year_marriage" || watchedData.eligibility_basis === "qualified_employment") && (
+                    {(watchedData.marital_status === "married" || watchedData.eligibility_basis === "3year_marriage" || watchedData.eligibility_basis === "qualified_employment") && (
                   <div className="question-card">
                     <div className="question-card-title">Spouse Information</div>
                     <p className="helper-text" style={{ marginBottom: "20px" }}>
-                      If you are filing under one of the categories below, answer Item Numbers 4.a. - 8.:<br />
-                      Spouse of U.S. Citizen, Part 1., Item Number 1.b.; or;<br />
-                      Spouse of U.S. Citizen in Qualified Employment Outside the United States, Part 1., Item Number 1.d.
-                    </p>
+                          If you are filing under one of the categories below, answer Item Numbers 4.a. - 8.:<br />
+                          Spouse of U.S. Citizen, Part 1., Item Number 1.b.; or;<br />
+                          Spouse of U.S. Citizen in Qualified Employment Outside the United States, Part 1., Item Number 1.d.
+                        </p>
 
-                    {/* Item 4.a: Current Spouse's Legal Name */}
-                    <div className="form-group">
-                      <label className="form-label">4.a. Current Spouse's Legal Name</label>
-                      <div className="form-row-thirds">
-                        <div>
-                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Family Name (Last Name)</label>
-                          <input type="text" className="form-input" {...register("spouse_last_name")} />
+                        {/* Item 4.a: Current Spouse's Legal Name */}
+                        <div className="form-group">
+                          <label className="form-label">4.a. Current Spouse's Legal Name</label>
+                          <div className="form-row-thirds">
+                            <div>
+                              <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Family Name (Last Name)</label>
+                              <input type="text" className="form-input" {...register("spouse_last_name")} />
+                  </div>
+                            <div>
+                              <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Given Name (First Name)</label>
+                              <input type="text" className="form-input" {...register("spouse_first_name")} />
+                            </div>
+                            <div>
+                              <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Middle Name (if applicable)</label>
+                              <input type="text" className="form-input" {...register("spouse_middle_name")} />
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Given Name (First Name)</label>
-                          <input type="text" className="form-input" {...register("spouse_first_name")} />
-                        </div>
-                        <div>
-                          <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>Middle Name (if applicable)</label>
-                          <input type="text" className="form-input" {...register("spouse_middle_name")} />
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* Item 4.b: Spouse Date of Birth */}
-                    <div className="form-group">
-                      <label className="form-label">4.b. Current Spouse's Date of Birth (mm/dd/yyyy)</label>
-                      <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_of_birth")} />
-                    </div>
+                        {/* Item 4.b: Spouse Date of Birth */}
+                  <div className="form-group">
+                          <label className="form-label">4.b. Current Spouse's Date of Birth (mm/dd/yyyy)</label>
+                          <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_of_birth")} />
+                  </div>
 
-                    {/* Item 4.c: Date Entered into Marriage */}
-                    <div className="form-group">
-                      <label className="form-label">4.c. Date You Entered into Marriage with Current Spouse (mm/dd/yyyy)</label>
-                      <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_of_marriage")} />
-                    </div>
+                        {/* Item 4.c: Date Entered into Marriage */}
+                        <div className="form-group">
+                          <label className="form-label">4.c. Date You Entered into Marriage with Current Spouse (mm/dd/yyyy)</label>
+                          <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_of_marriage")} />
+                </div>
 
-                    {/* Item 4.d: Spouse Address Same */}
+                        {/* Item 4.d: Spouse Address Same */}
                     <YesNoField name="spouse_address_same_as_applicant" metaId="spouse_address_same_as_applicant" label="4.d. Is your current spouse's present physical address the same as your physical address?" />
-                    {watchedData.spouse_address_same_as_applicant === "no" && (
-                      <p className="helper-text" style={{ marginTop: "-10px" }}>If you answered "No," provide address in Part 14. Additional Information.</p>
-                    )}
-
-                    {/* Item 5.a: When did spouse become citizen */}
-                    <YesNoField name="spouse_is_us_citizen" metaId="spouse_is_us_citizen" label="5.a. When did your current spouse become a U.S. citizen?" />
-
-                    {watchedData.spouse_is_us_citizen === "yes" && (
-                      <>
-                        <div className="form-group" style={{ marginTop: "10px" }}>
-                          <label className="form-label">How did your spouse become a U.S. citizen?</label>
-                          <div className="radio-group">
-                            <div className="radio-option">
-                              <input type="radio" id="spouse-citizen-birth-yes" value="yes" {...register("spouse_citizenship_by_birth")} />
-                              <label htmlFor="spouse-citizen-birth-yes" className="radio-label">By Birth in the United States - Go to Item Number 7.</label>
-                            </div>
-                            <div className="radio-option">
-                              <input type="radio" id="spouse-citizen-birth-no" value="no" {...register("spouse_citizenship_by_birth")} />
-                              <label htmlFor="spouse-citizen-birth-no" className="radio-label">Other - Complete Item Number 5.b.</label>
-                            </div>
-                          </div>
-                          {renderQuestionGuidance("spouse_citizenship_by_birth")}
-                        </div>
-
-                        {watchedData.spouse_citizenship_by_birth === "no" && (
-                          <div className="form-group">
-                            <label className="form-label">5.b. Date Your Current Spouse Became a U.S. Citizen (mm/dd/yyyy)</label>
-                            <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_became_citizen")} />
-                          </div>
+                        {watchedData.spouse_address_same_as_applicant === "no" && (
+                          <p className="helper-text" style={{ marginTop: "-10px" }}>If you answered "No," provide address in Part 14. Additional Information.</p>
                         )}
-                      </>
-                    )}
 
-                    {/* Item 6: Spouse A-Number */}
-                    <div className="form-group">
-                      <label className="form-label">6. Current Spouse's Alien Registration Number (A-Number) (if any)</label>
-                      <input type="text" className="form-input" placeholder="A-XXXXXXXXX" style={{ maxWidth: "200px" }} {...register("spouse_a_number")} />
-                    </div>
+                        {/* Item 5.a: When did spouse become citizen */}
+                    <YesNoField name="spouse_is_us_citizen" metaId="spouse_is_us_citizen" label="5.a. When did your current spouse become a U.S. citizen?" />
+                        
+                        {watchedData.spouse_is_us_citizen === "yes" && (
+                          <>
+                            <div className="form-group" style={{ marginTop: "10px" }}>
+                              <label className="form-label">How did your spouse become a U.S. citizen?</label>
+                              <div className="radio-group">
+                                <div className="radio-option">
+                                  <input type="radio" id="spouse-citizen-birth-yes" value="yes" {...register("spouse_citizenship_by_birth")} />
+                                  <label htmlFor="spouse-citizen-birth-yes" className="radio-label">By Birth in the United States - Go to Item Number 7.</label>
+                                </div>
+                                <div className="radio-option">
+                                  <input type="radio" id="spouse-citizen-birth-no" value="no" {...register("spouse_citizenship_by_birth")} />
+                                  <label htmlFor="spouse-citizen-birth-no" className="radio-label">Other - Complete Item Number 5.b.</label>
+                                </div>
+                              </div>
+                          {renderQuestionGuidance("spouse_citizenship_by_birth")}
+                            </div>
 
-                    {/* Item 7: Spouse Times Married */}
-                    <div className="form-group">
+                            {watchedData.spouse_citizenship_by_birth === "no" && (
+                  <div className="form-group">
+                                <label className="form-label">5.b. Date Your Current Spouse Became a U.S. Citizen (mm/dd/yyyy)</label>
+                                <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_became_citizen")} />
+                  </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Item 6: Spouse A-Number */}
+                  <div className="form-group">
+                          <label className="form-label">6. Current Spouse's Alien Registration Number (A-Number) (if any)</label>
+                          <input type="text" className="form-input" placeholder="A-XXXXXXXXX" style={{ maxWidth: "200px" }} {...register("spouse_a_number")} />
+                  </div>
+
+                        {/* Item 7: Spouse Times Married */}
+                        <div className="form-group">
                       <label className="form-label">7. {labelFor("spouse_times_married", "How many times has your current spouse been married?")}</label>
                       {renderQuestionGuidance("spouse_times_married")}
-                      <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("spouse_times_married")} />
-                      <p className="helper-text" style={{ marginTop: "4px" }}>Provide divorce decrees, annulment decrees, or death certificates showing that all of your spouse's prior marriages were terminated (if applicable).</p>
-                    </div>
+                          <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("spouse_times_married")} />
+                          <p className="helper-text" style={{ marginTop: "4px" }}>Provide divorce decrees, annulment decrees, or death certificates showing that all of your spouse's prior marriages were terminated (if applicable).</p>
+                        </div>
 
-                    {/* Item 8: Spouse Current Employer */}
-                    <div className="form-group">
+                        {/* Item 8: Spouse Current Employer */}
+                        <div className="form-group">
                       <label className="form-label">8. {labelFor("spouse_current_employer", "Current Spouse's Current Employer or Company")}</label>
                       {renderQuestionGuidance("spouse_current_employer")}
-                      <input type="text" className="form-input" {...register("spouse_current_employer")} />
-                    </div>
+                          <input type="text" className="form-input" {...register("spouse_current_employer")} />
+                </div>
                   </div>
                 )}
               </>
@@ -3308,87 +3682,87 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Children Information</div>
 
-                  <div className="form-group">
+                <div className="form-group">
                     <label className="form-label">1. {labelFor("total_children", "Indicate your total number of children under 18 years of age.")}</label>
                     {renderQuestionGuidance("total_children")}
-                    <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("total_children")} />
-                  </div>
+                  <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("total_children")} />
+                </div>
 
-                  {parseInt(watchedData.total_children || "0") > 0 && (
+                {parseInt(watchedData.total_children || "0") > 0 && (
                     <>
                       <div className="form-group" style={{ marginTop: "24px" }}>
-                        <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
-                          2. Provide information about your children
-                          <InfoIcon tooltip="For the residence and relationship columns, you must type or print one of the valid options listed. If any of your children do not reside with you, provide the address(es) where those children live in Part 14. Additional Information. If you have more than three children, use the space provided in Part 14. Additional Information." />
-                        </label>
-
-                        {childrenFields.slice(0, Math.min(parseInt(watchedData.total_children || "0"), 10)).map((field, index) => (
-                          <div key={field.id} style={{ marginBottom: "24px", padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                              <h3 style={{ fontSize: "16px", fontWeight: "600" }}>Child {index + 1}</h3>
-                              {index >= parseInt(watchedData.total_children || "0") && (
-                                <button
-                                  type="button"
-                                  onClick={() => removeChild(index)}
-                                  style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              )}
-                            </div>
-                            <div className="form-row-equal">
-                              <div className="form-group">
-                                <label className="form-label">Son or Daughter's Name (First Name and Family Name)</label>
-                                <div className="form-row-equal">
-                                  <input type="text" className="form-input" placeholder="First Name" {...register(`children.${index}.first_name`)} />
-                                  <input type="text" className="form-input" placeholder="Last Name" {...register(`children.${index}.last_name`)} />
-                                </div>
-                              </div>
-                            </div>
-                            <div className="form-row-equal">
-                              <div className="form-group">
-                                <label className="form-label">Date of Birth (mm/dd/yyyy)</label>
-                                <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`children.${index}.date_of_birth`)} />
-                              </div>
-                              <div className="form-group">
-                                <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
-                                  Residence
-                                  <InfoIcon tooltip="Valid options include: resides with me, does not reside with me, or unknown/missing" />
-                                </label>
-                                <select className="form-select" {...register(`children.${index}.residence`)}>
-                                  <option value="">Select...</option>
-                                  <option value="resides with me">Resides with me</option>
-                                  <option value="does not reside with me">Does not reside with me</option>
-                                  <option value="unknown/missing">Unknown/Missing</option>
-                                </select>
-                              </div>
-                              <div className="form-group">
-                                <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
-                                  Relationship
-                                  <InfoIcon tooltip="Valid options include: biological son or daughter, stepchild, or legally adopted son or daughter" />
-                                </label>
-                                <select className="form-select" {...register(`children.${index}.relationship`)}>
-                                  <option value="">Select...</option>
-                                  <option value="biological son or daughter">Biological son or daughter</option>
-                                  <option value="stepchild">Stepchild</option>
-                                  <option value="legally adopted son or daughter">Legally adopted son or daughter</option>
-                                </select>
-                              </div>
-                            </div>
+                      <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                        2. Provide information about your children
+                        <InfoIcon tooltip="For the residence and relationship columns, you must type or print one of the valid options listed. If any of your children do not reside with you, provide the address(es) where those children live in Part 14. Additional Information. If you have more than three children, use the space provided in Part 14. Additional Information." />
+                      </label>
+                      
+                      {childrenFields.slice(0, Math.min(parseInt(watchedData.total_children || "0"), 10)).map((field, index) => (
+                        <div key={field.id} style={{ marginBottom: "24px", padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                            <h3 style={{ fontSize: "16px", fontWeight: "600" }}>Child {index + 1}</h3>
+                            {index >= parseInt(watchedData.total_children || "0") && (
+                              <button
+                                type="button"
+                                onClick={() => removeChild(index)}
+                                style={{ background: "none", border: "none", color: "var(--gray)", cursor: "pointer" }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
                           </div>
-                        ))}
-                      </div>
-
-                      {watchedData.eligibility_basis === "qualified_employment" && (
-                        <YesNoField
-                          name="providing_support_for_children"
+                <div className="form-row-equal">
+                  <div className="form-group">
+                              <label className="form-label">Son or Daughter's Name (First Name and Family Name)</label>
+                              <div className="form-row-equal">
+                                <input type="text" className="form-input" placeholder="First Name" {...register(`children.${index}.first_name`)} />
+                                <input type="text" className="form-input" placeholder="Last Name" {...register(`children.${index}.last_name`)} />
+                  </div>
+                  </div>
+                </div>
+                          <div className="form-row-equal">
+                  <div className="form-group">
+                              <label className="form-label">Date of Birth (mm/dd/yyyy)</label>
+                              <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register(`children.${index}.date_of_birth`)} />
+                  </div>
+                  <div className="form-group">
+                              <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                                Residence
+                                <InfoIcon tooltip="Valid options include: resides with me, does not reside with me, or unknown/missing" />
+                              </label>
+                              <select className="form-select" {...register(`children.${index}.residence`)}>
+                      <option value="">Select...</option>
+                                <option value="resides with me">Resides with me</option>
+                                <option value="does not reside with me">Does not reside with me</option>
+                                <option value="unknown/missing">Unknown/Missing</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                              <label className="form-label" style={{ display: "flex", alignItems: "center" }}>
+                                Relationship
+                                <InfoIcon tooltip="Valid options include: biological son or daughter, stepchild, or legally adopted son or daughter" />
+                              </label>
+                              <select className="form-select" {...register(`children.${index}.relationship`)}>
+                                <option value="">Select...</option>
+                                <option value="biological son or daughter">Biological son or daughter</option>
+                                <option value="stepchild">Stepchild</option>
+                                <option value="legally adopted son or daughter">Legally adopted son or daughter</option>
+                              </select>
+                  </div>
+                </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {watchedData.eligibility_basis === "qualified_employment" && (
+                        <YesNoField 
+                          name="providing_support_for_children" 
                           metaId="providing_support_for_children"
-                          label="Are you providing support for your son or daughter?"
+                          label="Are you providing support for your son or daughter?" 
                           tooltip="Only answer Item Number 8. if you are filing under Part 1., Item Number 1.d., Spouse of U.S. Citizen in Qualified Employment Outside the United States."
                         />
-                      )}
+                    )}
                     </>
-                  )}
+                )}
                 </div>
               </>
             )}
@@ -3407,52 +3781,52 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Fee Reduction Request</div>
 
-                  <p className="helper-text" style={{ marginBottom: "24px" }}>
+                <p className="helper-text" style={{ marginBottom: "24px" }}>
                     For information about fees, fee waivers, and reduced fees, see Form G-1055, Fee Schedule, at www.uscis.gov/g-1055. To request a reduced fee, complete Item Numbers 1. - 5.b. If you are not requesting a reduced fee, complete Item Number 1. and proceed to Part 11.
-                  </p>
+                </p>
 
-                  <YesNoField
-                    name="fee_reduction_requested"
+                <YesNoField 
+                  name="fee_reduction_requested" 
                     metaId="fee_reduction_requested"
                     label="1. Are you requesting a reduced fee?"
-                    tooltip="My household income is less than or equal to 400% of the Federal Poverty Guidelines (see Instructions for required documentation)."
-                  />
-
-                  {watchedData.fee_reduction_requested === "yes" && (
-                    <>
-                      <div className="form-group" style={{ marginTop: "16px" }}>
+                  tooltip="My household income is less than or equal to 400% of the Federal Poverty Guidelines (see Instructions for required documentation)."
+                />
+                
+                {watchedData.fee_reduction_requested === "yes" && (
+                  <>
+                    <div className="form-group" style={{ marginTop: "16px" }}>
                         <label className="form-label">2. {labelFor("household_income", "Total household income")}</label>
                         {renderQuestionGuidance("household_income")}
-                        <input type="text" className="form-input" placeholder="$0.00" style={{ maxWidth: "200px" }} {...register("household_income")} />
-                      </div>
+                      <input type="text" className="form-input" placeholder="$0.00" style={{ maxWidth: "200px" }} {...register("household_income")} />
+                    </div>
 
-                      <div className="form-group">
+                <div className="form-group">
                         <label className="form-label">3. {labelFor("household_size", "My household size is")}</label>
                         {renderQuestionGuidance("household_size")}
-                        <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("household_size")} />
-                      </div>
+                      <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("household_size")} />
+                </div>
 
-                      <div className="form-group">
+                  <div className="form-group">
                         <label className="form-label">4. {labelFor("household_income_earners", "Total number of household members earning income including yourself")}</label>
                         {renderQuestionGuidance("household_income_earners")}
-                        <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("household_income_earners")} />
-                      </div>
+                      <input type="number" className="form-input" placeholder="0" style={{ maxWidth: "100px" }} {...register("household_income_earners")} />
+                    </div>
 
                       <YesNoField name="is_head_of_household" metaId="is_head_of_household" label="5.a. Are you the head of household?" />
-
-                      {watchedData.is_head_of_household === "no" && (
-                        <div className="form-group" style={{ marginTop: "10px" }}>
+                    
+                    {watchedData.is_head_of_household === "no" && (
+                      <div className="form-group" style={{ marginTop: "10px" }}>
                           <label className="form-label">5.b. {labelFor("head_of_household_name", "Name of head of household")}</label>
                           {renderQuestionGuidance("head_of_household_name")}
-                          <input type="text" className="form-input" placeholder="Full name" {...register("head_of_household_name")} />
-                        </div>
-                      )}
-                    </>
-                  )}
+                        <input type="text" className="form-input" placeholder="Full name" {...register("head_of_household_name")} />
+                  </div>
+                    )}
+                  </>
+                )}
 
-                  {watchedData.fee_reduction_requested === "no" && (
-                    <p className="helper-text" style={{ marginTop: "-10px" }}>(Skip to Part 11.)</p>
-                  )}
+                {watchedData.fee_reduction_requested === "no" && (
+                  <p className="helper-text" style={{ marginTop: "-10px" }}>(Skip to Part 11.)</p>
+                )}
                 </div>
               </>
             )}
@@ -3466,43 +3840,43 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Applicant Contact</div>
 
-                  <div className="form-group">
+                      <div className="form-group">
                     <label className="form-label">1. {labelFor("daytime_phone", "Applicant's Daytime Telephone Number")}</label>
-                    <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("daytime_phone")} />
-                    {errors.daytime_phone && <p className="error-message">{errors.daytime_phone.message}</p>}
-                  </div>
+                  <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("daytime_phone")} />
+                  {errors.daytime_phone && <p className="error-message">{errors.daytime_phone.message}</p>}
+                      </div>
 
-                  <div className="form-group">
+                      <div className="form-group">
                     <label className="form-label">2. {labelFor("mobile_phone", "Applicant's Mobile Telephone Number (if any)")}</label>
-                    <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("mobile_phone")} />
-                  </div>
+                  <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("mobile_phone")} />
+                      </div>
 
-                  <div className="form-group">
+                      <div className="form-group">
                     <label className="form-label">3. {labelFor("email", "Applicant's Email Address (if any)")}</label>
-                    <input type="email" className="form-input" placeholder="you@example.com" {...register("email")} />
-                    {errors.email && <p className="error-message">{errors.email.message}</p>}
+                  <input type="email" className="form-input" placeholder="you@example.com" {...register("email")} />
+                  {errors.email && <p className="error-message">{errors.email.message}</p>}
                   </div>
-                </div>
+                    </div>
 
                 {/* Card: Certification & Signature */}
                 <div className="question-card">
                   <div className="question-card-title">Certification & Signature</div>
 
                   <div className="form-group">
-                    <label className="form-label">4. Applicant's Certification and Signature</label>
-                    <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
-                      <p style={{ fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" }}>
-                        I certify, under penalty of perjury, that I provided or authorized all of the responses and information contained in and submitted with my application, I read and understand or, if interpreted to me in a language in which I am fluent by the interpreter listed in Part 12., understood, all of the responses and information contained in, and submitted with, my application, and that all of the responses and the information are complete, true, and correct. Furthermore, I authorize the release of any information from any and all of my records that USCIS may need to determine my eligibility for an immigration request and to other entities and persons where necessary for the administration and enforcement of U.S. immigration law.
-                      </p>
-                      <div className="form-row-equal">
-                        <div className="form-group">
-                          <label className="form-label">Applicant's Signature (or signature of a legal guardian, surrogate, or designated representative, if applicable)</label>
-                          <input type="text" className="form-input" placeholder="Type your full name" {...register("applicant_signature")} />
-                          <p className="helper-text" style={{ fontSize: "12px", marginTop: "4px" }}>By typing your name, you are signing this form electronically</p>
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">Date of Signature (mm/dd/yyyy)</label>
-                          <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("signature_date")} />
+                  <label className="form-label">4. Applicant's Certification and Signature</label>
+                  <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
+                    <p style={{ fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" }}>
+                      I certify, under penalty of perjury, that I provided or authorized all of the responses and information contained in and submitted with my application, I read and understand or, if interpreted to me in a language in which I am fluent by the interpreter listed in Part 12., understood, all of the responses and information contained in, and submitted with, my application, and that all of the responses and the information are complete, true, and correct. Furthermore, I authorize the release of any information from any and all of my records that USCIS may need to determine my eligibility for an immigration request and to other entities and persons where necessary for the administration and enforcement of U.S. immigration law.
+                    </p>
+                    <div className="form-row-equal">
+                      <div className="form-group">
+                        <label className="form-label">Applicant's Signature (or signature of a legal guardian, surrogate, or designated representative, if applicable)</label>
+                        <input type="text" className="form-input" placeholder="Type your full name" {...register("applicant_signature")} />
+                        <p className="helper-text" style={{ fontSize: "12px", marginTop: "4px" }}>By typing your name, you are signing this form electronically</p>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Date of Signature (mm/dd/yyyy)</label>
+                        <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("signature_date")} />
                         </div>
                       </div>
                     </div>
@@ -3521,80 +3895,80 @@ export default function N400Form() {
                   <div className="question-card-title">Interpreter Information</div>
 
                   <YesNoField name="used_interpreter" metaId="used_interpreter" label="Did you use an interpreter to complete this application?" />
-
-                  {watchedData.used_interpreter === "yes" && (
-                    <>
-                      <div className="form-group" style={{ marginTop: "20px" }}>
-                        <label className="form-label">Interpreter's Full Name</label>
-                        <div className="form-row-equal">
-                          <div>
+                
+                {watchedData.used_interpreter === "yes" && (
+                  <>
+                    <div className="form-group" style={{ marginTop: "20px" }}>
+                      <label className="form-label">Interpreter's Full Name</label>
+                    <div className="form-row-equal">
+                        <div>
                             <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("interpreter_last_name", "Interpreter's Family Name (Last Name)")}</label>
-                            <input type="text" className="form-input" {...register("interpreter_last_name")} />
-                          </div>
-                          <div>
+                          <input type="text" className="form-input" {...register("interpreter_last_name")} />
+                        </div>
+                        <div>
                             <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("interpreter_first_name", "Interpreter's Given Name (First Name)")}</label>
-                            <input type="text" className="form-input" {...register("interpreter_first_name")} />
-                          </div>
+                          <input type="text" className="form-input" {...register("interpreter_first_name")} />
                         </div>
                       </div>
+                    </div>
 
                       <div className="form-group">
                         <label className="form-label">2. {labelFor("interpreter_business_name", "Interpreter's Business or Organization Name")}</label>
                         {renderQuestionGuidance("interpreter_business_name")}
-                        <input type="text" className="form-input" {...register("interpreter_business_name")} />
+                      <input type="text" className="form-input" {...register("interpreter_business_name")} />
                       </div>
 
-                      <div className="form-row-equal">
-                        <div className="form-group">
+                    <div className="form-row-equal">
+                      <div className="form-group">
                           <label className="form-label">3. {labelFor("interpreter_phone", "Interpreter's Daytime Telephone Number")}</label>
                           {renderQuestionGuidance("interpreter_phone")}
-                          <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("interpreter_phone")} />
-                        </div>
-                        <div className="form-group">
+                        <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("interpreter_phone")} />
+                      </div>
+                      <div className="form-group">
                           <label className="form-label">4. {labelFor("interpreter_mobile", "Interpreter's Mobile Telephone Number (if any)")}</label>
                           {renderQuestionGuidance("interpreter_mobile")}
-                          <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("interpreter_mobile")} />
-                        </div>
+                        <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("interpreter_mobile")} />
                       </div>
+                    </div>
 
-                      <div className="form-group">
+                    <div className="form-group">
                         <label className="form-label">5. {labelFor("interpreter_email", "Interpreter's Email Address (if any)")}</label>
                         {renderQuestionGuidance("interpreter_email")}
-                        <input type="email" className="form-input" placeholder="interpreter@example.com" {...register("interpreter_email")} />
-                      </div>
+                      <input type="email" className="form-input" placeholder="interpreter@example.com" {...register("interpreter_email")} />
+                    </div>
 
-                      <div className="form-group">
+                    <div className="form-group">
                         <label className="form-label">{labelFor("interpreter_language", "Language in which interpreter is fluent")}</label>
                         {renderQuestionGuidance("interpreter_language")}
-                        <input type="text" className="form-input" placeholder="e.g., Spanish, Chinese, etc." {...register("interpreter_language")} />
-                      </div>
+                      <input type="text" className="form-input" placeholder="e.g., Spanish, Chinese, etc." {...register("interpreter_language")} />
+                    </div>
 
-                      <div className="form-group" style={{ marginTop: "24px" }}>
-                        <label className="form-label">Interpreter's Certification and Signature</label>
-                        <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
-                          <p style={{ fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" }}>
-                            I certify, under penalty of perjury, that I am fluent in English and [language] and I have interpreted every question on the application and Instructions and interpreted the applicant's answers to the questions in that language, and the applicant informed me that he or she understood every instruction, question, and answer on the application.
-                          </p>
-                          <div className="form-row-equal">
-                            <div className="form-group">
+                    <div className="form-group" style={{ marginTop: "24px" }}>
+                      <label className="form-label">Interpreter's Certification and Signature</label>
+                      <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
+                        <p style={{ fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" }}>
+                          I certify, under penalty of perjury, that I am fluent in English and [language] and I have interpreted every question on the application and Instructions and interpreted the applicant's answers to the questions in that language, and the applicant informed me that he or she understood every instruction, question, and answer on the application.
+                        </p>
+                        <div className="form-row-equal">
+                          <div className="form-group">
                               <label className="form-label">{labelFor("interpreter_signature", "Interpreter's Signature")}</label>
                               {renderQuestionGuidance("interpreter_signature")}
-                              <input type="text" className="form-input" placeholder="Type interpreter's full name" {...register("interpreter_signature")} />
-                            </div>
-                            <div className="form-group">
+                            <input type="text" className="form-input" placeholder="Type interpreter's full name" {...register("interpreter_signature")} />
+                  </div>
+                          <div className="form-group">
                               <label className="form-label">{labelFor("interpreter_signature_date", "Date of Signature (mm/dd/yyyy)")}</label>
                               {renderQuestionGuidance("interpreter_signature_date")}
-                              <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("interpreter_signature_date")} />
-                            </div>
+                            <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("interpreter_signature_date")} />
                           </div>
                         </div>
                       </div>
-                    </>
-                  )}
+                    </div>
+                  </>
+                )}
 
-                  {watchedData.used_interpreter === "no" && (
-                    <p className="helper-text" style={{ marginTop: "-10px" }}>(Skip to Part 13 if someone else prepared this application, otherwise skip to Part 14.)</p>
-                  )}
+                {watchedData.used_interpreter === "no" && (
+                  <p className="helper-text" style={{ marginTop: "-10px" }}>(Skip to Part 13 if someone else prepared this application, otherwise skip to Part 14.)</p>
+                )}
                 </div>
               </>
             )}
@@ -3609,74 +3983,74 @@ export default function N400Form() {
                   <div className="question-card-title">Preparer Information</div>
 
                   <YesNoField name="used_preparer" metaId="used_preparer" label="Did someone other than you prepare this application?" />
-
-                  {watchedData.used_preparer === "yes" && (
-                    <>
-                      <div className="form-group" style={{ marginTop: "20px" }}>
-                        <label className="form-label">Preparer's Full Name</label>
-                        <div className="form-row-equal">
-                          <div>
+                
+                {watchedData.used_preparer === "yes" && (
+                  <>
+                    <div className="form-group" style={{ marginTop: "20px" }}>
+                      <label className="form-label">Preparer's Full Name</label>
+                      <div className="form-row-equal">
+                        <div>
                             <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("preparer_last_name", "Preparer's Family Name (Last Name)")}</label>
-                            <input type="text" className="form-input" {...register("preparer_last_name")} />
-                          </div>
-                          <div>
+                          <input type="text" className="form-input" {...register("preparer_last_name")} />
+                        </div>
+                        <div>
                             <label className="form-label" style={{ fontSize: "14px", marginBottom: "4px" }}>{labelFor("preparer_first_name", "Preparer's Given Name (First Name)")}</label>
-                            <input type="text" className="form-input" {...register("preparer_first_name")} />
-                          </div>
+                          <input type="text" className="form-input" {...register("preparer_first_name")} />
                         </div>
                       </div>
+                    </div>
 
-                      <div className="form-group">
+                <div className="form-group">
                         <label className="form-label">2. {labelFor("preparer_business_name", "Preparer's Business or Organization Name")}</label>
                         {renderQuestionGuidance("preparer_business_name")}
-                        <input type="text" className="form-input" {...register("preparer_business_name")} />
-                      </div>
+                      <input type="text" className="form-input" {...register("preparer_business_name")} />
+                </div>
 
-                      <div className="form-row-equal">
-                        <div className="form-group">
+                    <div className="form-row-equal">
+                      <div className="form-group">
                           <label className="form-label">3. {labelFor("preparer_phone", "Preparer's Daytime Telephone Number")}</label>
                           {renderQuestionGuidance("preparer_phone")}
-                          <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("preparer_phone")} />
-                        </div>
-                        <div className="form-group">
+                        <input type="tel" className="form-input" placeholder="(555) 123-4567" {...register("preparer_phone")} />
+                      </div>
+                      <div className="form-group">
                           <label className="form-label">4. {labelFor("preparer_mobile", "Preparer's Mobile Telephone Number (if any)")}</label>
                           {renderQuestionGuidance("preparer_mobile")}
-                          <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("preparer_mobile")} />
-                        </div>
+                        <input type="tel" className="form-input" placeholder="(555) 987-6543" {...register("preparer_mobile")} />
                       </div>
+                    </div>
 
-                      <div className="form-group">
+                    <div className="form-group">
                         <label className="form-label">5. {labelFor("preparer_email", "Preparer's Email Address (if any)")}</label>
                         {renderQuestionGuidance("preparer_email")}
-                        <input type="email" className="form-input" placeholder="preparer@example.com" {...register("preparer_email")} />
-                      </div>
+                      <input type="email" className="form-input" placeholder="preparer@example.com" {...register("preparer_email")} />
+                    </div>
 
-                      <div className="form-group" style={{ marginTop: "24px" }}>
-                        <label className="form-label">Preparer's Certification and Signature</label>
-                        <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
-                          <p style={{ fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" }}>
-                            I certify, under penalty of perjury, that I prepared this application for the applicant at his or her request and with express consent and that all of the responses and information contained in and submitted with the application are complete, true, and correct and reflects only information provided by the applicant. The applicant reviewed the responses and information and informed me that he or she understands the responses and information in or submitted with the application.
-                          </p>
-                          <div className="form-row-equal">
-                            <div className="form-group">
+                    <div className="form-group" style={{ marginTop: "24px" }}>
+                      <label className="form-label">Preparer's Certification and Signature</label>
+                      <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
+                        <p style={{ fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" }}>
+                          I certify, under penalty of perjury, that I prepared this application for the applicant at his or her request and with express consent and that all of the responses and information contained in and submitted with the application are complete, true, and correct and reflects only information provided by the applicant. The applicant reviewed the responses and information and informed me that he or she understands the responses and information in or submitted with the application.
+                        </p>
+                        <div className="form-row-equal">
+                          <div className="form-group">
                               <label className="form-label">{labelFor("preparer_signature", "Preparer's Signature")}</label>
                               {renderQuestionGuidance("preparer_signature")}
-                              <input type="text" className="form-input" placeholder="Type preparer's full name" {...register("preparer_signature")} />
-                            </div>
-                            <div className="form-group">
+                            <input type="text" className="form-input" placeholder="Type preparer's full name" {...register("preparer_signature")} />
+                  </div>
+                          <div className="form-group">
                               <label className="form-label">{labelFor("preparer_signature_date", "Date of Signature (mm/dd/yyyy)")}</label>
                               {renderQuestionGuidance("preparer_signature_date")}
-                              <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("preparer_signature_date")} />
-                            </div>
+                            <input type="text" className="form-input" placeholder="MM/DD/YYYY" {...register("preparer_signature_date")} />
                           </div>
                         </div>
                       </div>
-                    </>
-                  )}
+                    </div>
+                  </>
+                )}
 
-                  {watchedData.used_preparer === "no" && (
-                    <p className="helper-text" style={{ marginTop: "-10px" }}>(Skip to Part 14.)</p>
-                  )}
+                {watchedData.used_preparer === "no" && (
+                  <p className="helper-text" style={{ marginTop: "-10px" }}>(Skip to Part 14.)</p>
+                )}
                 </div>
               </>
             )}
@@ -3690,12 +4064,12 @@ export default function N400Form() {
                 <div className="question-card">
                   <div className="question-card-title">Additional Information</div>
 
-                  <p className="helper-text" style={{ marginBottom: "24px" }}>
+                <p className="helper-text" style={{ marginBottom: "24px" }}>
                     If you need extra space to provide any additional information within this application, use the space below. Use this section to provide explanations for any "Yes" answers in Part 9, or to provide any additional information requested throughout the form.
                   </p>
-
+                  
                   {/* Additional information array */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                     {additionalFields.length === 0 && (
                       <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px" }}>
                         <p style={{ fontSize: "14px", color: "var(--gray)", marginBottom: "12px" }}>No additional information entries yet. Click "Add Entry" to begin.</p>
@@ -3794,41 +4168,6 @@ export default function N400Form() {
                   </div>
                 )}
 
-                {/* Missing Explanations Section */}
-                {(() => {
-                  const missingExplanations = (PART_9_METADATA.questions || [])
-                    .filter((question) => {
-                      const value = watchedData[question.id as keyof typeof watchedData];
-                      return question.explanation_required && value === "yes";
-                    });
-
-                  if (missingExplanations.length === 0) return null;
-
-                  return (
-                    <div className="review-alert-section error">
-                      <h3 className="review-alert-title">
-                        <span>📝</span> Explanations Needed
-                      </h3>
-                      <p className="review-alert-description">
-                        You answered "Yes" to the following questions that may require additional explanation in Part 14.
-                      </p>
-                      <ul className="review-alert-list">
-                        {missingExplanations.map((question) => (
-                          <li key={question.id}>
-                            {question.title || question.id}
-                          </li>
-                        ))}
-                      </ul>
-                      <button
-                        type="button"
-                        className="review-alert-btn"
-                        onClick={() => goToStep(15)}
-                      >
-                        Add Explanations (Part 14)
-                      </button>
-                    </div>
-                  );
-                })()}
 
                 <ReviewSection title="ELIGIBILITY" onEdit={() => goToStep(1)}>
                   <ReviewField label="Basis" value={ELIGIBILITY_OPTIONS.find(o => o.value === watchedData.eligibility_basis)?.label || "—"} />
@@ -3881,41 +4220,78 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 17 && (
               <div style={{ textAlign: "center", padding: "40px 0" }}>
+                {isFormSubmitted && paymentStatus === "paid" ? (
+                  <>
+                    <div className="complete-icon" style={{ fontSize: "64px", color: "var(--success)", marginBottom: "24px" }}>✓</div>
+                    <h2 style={{ fontSize: "24px", fontWeight: 600, marginBottom: "12px", color: "var(--dark)" }}>
+                      Application Submitted Successfully!
+                    </h2>
+                    <p style={{ fontSize: "16px", color: "var(--gray)", marginBottom: "32px", lineHeight: "1.6" }}>
+                      Your N-400 application has been submitted and your PDF is being generated.
+                      <br />
+                      The download will start automatically in a moment.
+                    </p>
+                    {isDownloading && (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", color: "var(--gray)" }}>
+                        <span className="spinner" />
+                        <span>Generating PDF...</span>
+                      </div>
+                    )}
+                  </>
+                ) : paymentStatus === "paid" && !isFormSubmitted ? (
+                  <>
+                    <div className="complete-icon">✓</div>
+                    <p style={{ fontSize: "16px", color: "var(--gray)", marginBottom: "32px", lineHeight: "1.6" }}>
+                      Payment confirmed. Please submit your application below.
+                    </p>
+                    <button
+                      type="submit"
+                      className="btn-next"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <span className="spinner" />
+                          Submitting...
+                        </>
+                      ) : (
+                        "SUBMIT APPLICATION"
+                      )}
+                    </button>
+                    <p style={{ fontSize: "14px", color: "var(--primary)", marginTop: "16px" }}>
+                      ✓ Payment confirmed
+                    </p>
+                  </>
+                ) : (
+                  <>
                 <div className="complete-icon">✓</div>
                 <p style={{ fontSize: "16px", color: "var(--gray)", marginBottom: "32px", lineHeight: "1.6" }}>
                   Your N-400 application data has been saved.
                   <br />
-                  {paymentStatus === "paid"
-                    ? "Download your completed form below."
-                    : "Complete payment to download your form."}
+                      Complete payment to download your form.
                 </p>
                 <button
                   type="button"
                   className="btn-next"
-                  onClick={() => handleDownloadPDF()}
-                  disabled={isDownloading || isRedirectingToPayment}
-                  data-download-btn
-                >
-                  {isRedirectingToPayment ? (
-                    <>
-                      <span className="spinner" />
-                      Redirecting to payment...
-                    </>
-                  ) : isDownloading ? (
+                      onClick={() => handleDownloadPDF()}
+                      disabled={isDownloading || isRedirectingToPayment}
+                      data-download-btn
+                    >
+                      {isRedirectingToPayment ? (
+                        <>
+                          <span className="spinner" />
+                          Redirecting to payment...
+                        </>
+                      ) : isDownloading ? (
                     <>
                       <span className="spinner" />
                       Generating PDF...
                     </>
-                  ) : paymentStatus === "paid" ? (
-                    "DOWNLOAD N-400 FORM"
                   ) : (
-                    "PAY & DOWNLOAD N-400 FORM"
+                        "PAY & DOWNLOAD N-400 FORM"
                   )}
                 </button>
-                {paymentStatus === "paid" && (
-                  <p style={{ fontSize: "14px", color: "var(--primary)", marginTop: "16px" }}>
-                    ✓ Payment confirmed
-                  </p>
+                  </>
                 )}
               </div>
             )}
@@ -3935,18 +4311,100 @@ export default function N400Form() {
             {currentStep === 16 && (
               <div className="button-row">
                 <button type="button" className="btn-back" onClick={handleBack}>← Back</button>
-                <button type="submit" className="btn-next" disabled={isSubmitting}>
-                  {isSubmitting ? (
-                    <>
-                      <span className="spinner" />
-                      Submitting...
-                    </>
-                  ) : (
-                    "SUBMIT APPLICATION"
-                  )}
-                </button>
+                {paymentStatus === "paid" ? (
+                  <button type="submit" className="btn-next" disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <>
+                        <span className="spinner" />
+                        Submitting...
+                      </>
+                    ) : (
+                      "SUBMIT APPLICATION"
+                    )}
+                  </button>
+                ) : (
+                  <button 
+                    type="button" 
+                    className="btn-next" 
+                    onClick={async () => {
+                      // Save form to Supabase first
+                      if (!session?.access_token) {
+                        setAuthError("Please sign in again.");
+                        return;
+                      }
+                      setIsSubmitting(true);
+                      try {
+                        const payload = buildFormPayload({ data: getValues() });
+                        const draftResult = await saveN400Draft(payload, session.access_token);
+                        
+                        if (!draftResult.success || !draftResult.data) {
+                          setAuthError(draftResult.error || "Failed to save form. Please try again.");
+                          return;
+                        }
+
+                        const formId = draftResult.data.id;
+                        setSubmittedId(formId);
+                        
+                        // Check if payment was already completed for this form
+                        const { data: formData, error: formError } = await supabase
+                          .from("n400_forms")
+                          .select("payment_status")
+                          .eq("id", formId)
+                          .single();
+
+                        if (!formError && formData && formData.payment_status === "paid") {
+                          // Already paid - update payment status and show submit button
+                          setPaymentStatus("paid");
+                          setIsRedirectingToPayment(false);
+                          return;
+                        }
+                        
+                        // Not paid yet - redirect to payment
+                        setIsRedirectingToPayment(true);
+                        const checkoutResponse = await fetch("/api/stripe/create-checkout", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${session.access_token}`,
+                          },
+                          body: JSON.stringify({ formId }),
+                        });
+
+                        const checkoutData = await checkoutResponse.json();
+                        if (checkoutData.url) {
+                          window.location.href = checkoutData.url;
+                        } else {
+                          setAuthError(checkoutData.error || "Failed to start checkout.");
+                          setIsRedirectingToPayment(false);
+                        }
+                      } catch (error) {
+                        console.error("Payment redirect error:", error);
+                        setAuthError("Failed to process payment. Please try again.");
+                        setIsRedirectingToPayment(false);
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                    }}
+                    disabled={isSubmitting || isRedirectingToPayment}
+                  >
+                    {isRedirectingToPayment ? (
+                      <>
+                        <span className="spinner" />
+                        Redirecting to payment...
+                      </>
+                    ) : isSubmitting ? (
+                      <>
+                        <span className="spinner" />
+                        Saving...
+                      </>
+                    ) : (
+                      "PAY TO ACCESS MY FORM"
+                    )}
+                  </button>
+                )}
               </div>
             )}
+
           </form>
         </div>
       </div>

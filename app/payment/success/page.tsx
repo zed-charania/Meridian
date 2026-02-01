@@ -63,7 +63,7 @@ function PaymentSuccessContent() {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          router.push(`/form?formId=${formId}&download=true`);
+          router.push(`/form?formId=${formId}&step=16`);
           return 0;
         }
         return prev - 1;
@@ -99,11 +99,11 @@ function PaymentSuccessContent() {
       </div>
 
       <button
-        onClick={() => router.push(`/form?formId=${formId}&download=true`)}
+        onClick={() => router.push(`/form?formId=${formId}&step=16`)}
         className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
         disabled={status !== "paid"}
       >
-        Download Now
+        Continue to Form
       </button>
     </div>
   );

@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
     // - Some fields are stored as JSON strings in Supabase (e.g. residence_addresses, employment_history, trips, children, crimes, additional_information).
     // - The Python service expects arrays of objects, not JSON strings.
     const arrayFields = [
+      "other_names",
       "residence_addresses",
       "employment_history",
       "trips",
