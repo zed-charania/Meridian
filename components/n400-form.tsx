@@ -117,7 +117,9 @@ const n400Schema = z.object({
   
   // Current Address (for backward compatibility)
   street_address: z.string().min(1, "Street address is required"),
+  apt_type: z.string().optional(),
   apt_ste_flr: z.string().optional(),
+  residence_in_care_of: z.string().optional(),
   city: z.string().min(1, "City is required"),
   state: z.string().min(1, "State is required"),
   zip_code: z.string().min(5, "ZIP code is required"),
@@ -129,11 +131,15 @@ const n400Schema = z.object({
   // Mailing Address (if different)
   mailing_same_as_residence: z.string().optional(),
   mailing_street_address: z.string().optional(),
+  mailing_apt_type: z.string().optional(),
   mailing_apt_ste_flr: z.string().optional(),
   mailing_in_care_of: z.string().optional(),
   mailing_city: z.string().optional(),
   mailing_state: z.string().optional(),
   mailing_zip_code: z.string().optional(),
+  mailing_province: z.string().optional(),
+  mailing_postal_code: z.string().optional(),
+  mailing_country: z.string().optional(),
 
   // ═══════════════════════════════════════════════════════════════
   // PART 7: BIOGRAPHIC INFORMATION
@@ -345,6 +351,11 @@ const n400Schema = z.object({
   interpreter_first_name: z.string().optional(),
   interpreter_last_name: z.string().optional(),
   interpreter_business_name: z.string().optional(),
+  interpreter_street_address: z.string().optional(),
+  interpreter_apt_ste_flr: z.string().optional(),
+  interpreter_city: z.string().optional(),
+  interpreter_state: z.string().optional(),
+  interpreter_zip_code: z.string().optional(),
   interpreter_phone: z.string().optional(),
   interpreter_mobile: z.string().optional(),
   interpreter_email: z.string().optional(),
@@ -359,11 +370,20 @@ const n400Schema = z.object({
   preparer_first_name: z.string().optional(),
   preparer_last_name: z.string().optional(),
   preparer_business_name: z.string().optional(),
+  preparer_street_address: z.string().optional(),
+  preparer_apt_ste_flr: z.string().optional(),
+  preparer_city: z.string().optional(),
+  preparer_state: z.string().optional(),
+  preparer_zip_code: z.string().optional(),
   preparer_phone: z.string().optional(),
   preparer_mobile: z.string().optional(),
   preparer_email: z.string().optional(),
   preparer_signature: z.string().optional(),
   preparer_signature_date: z.string().optional(),
+  preparer_is_attorney: z.string().optional(),
+  preparer_accredited_representative: z.string().optional(),
+  preparer_bar_number: z.string().optional(),
+  preparer_uscis_accreditation_number: z.string().optional(),
 
   // ═══════════════════════════════════════════════════════════════
   // PART 14: ADDITIONAL INFORMATION
@@ -768,7 +788,9 @@ function buildSampleFormValues(): Partial<FormData> {
     ssa_wants_card: "yes", // Triggers ssa_consent_disclosure requirement
     ssa_consent_disclosure: "yes", // Required when ssa_wants_card is "yes"
     street_address: "742 Evergreen Terrace",
+    apt_type: "apt",
     apt_ste_flr: "4B",
+    residence_in_care_of: "",
     city: "Seattle",
     state: "WA",
     zip_code: "98101",
@@ -778,7 +800,8 @@ function buildSampleFormValues(): Partial<FormData> {
     residence_to: "PRESENT",
     mailing_same_as_residence: "no", // Set to "no" to trigger mailing address fields
     mailing_street_address: "PO Box 12345",
-    mailing_apt_ste_flr: "Suite 200",
+    mailing_apt_type: "ste",
+    mailing_apt_ste_flr: "200",
     mailing_in_care_of: "Michael Johnson",
     mailing_city: "Seattle",
     mailing_state: "WA",
@@ -966,6 +989,14 @@ function buildSampleFormValues(): Partial<FormData> {
         dates_to: "2019-05-31",
       },
     ],
+    // Current Employment
+    current_employer: "Amazon Web Services",
+    current_occupation: "Senior Software Engineer",
+    employer_city: "Seattle",
+    employer_state: "WA",
+    employer_zip_code: "98101",
+    employment_from: "01/15/2020",
+    employment_to: "PRESENT",
     employment_history: [
       {
         employer_or_school: "Amazon Web Services",
@@ -1031,24 +1062,14 @@ function buildSampleFormValues(): Partial<FormData> {
     interpreter_first_name: "Maria",
     interpreter_last_name: "Garcia",
     interpreter_business_name: "Garcia Translation Services LLC",
+    interpreter_street_address: "500 Pine Street",
+    interpreter_apt_ste_flr: "Suite 200",
+    interpreter_city: "Seattle",
+    interpreter_state: "WA",
+    interpreter_zip_code: "98101",
     interpreter_phone: "(206) 555-2345",
     interpreter_mobile: "(206) 555-2346",
     interpreter_email: "maria.garcia@translation-services.com",
-    interpreter_language: "Spanish",
-    interpreter_signature: "Maria Elena Garcia",
-    interpreter_signature_date: new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
-    // Part 13 - Preparer (conditional - set to "yes" to fill preparer fields)
-    // Part 11 - Signature
-    applicant_signature: "Alicia Marie Johnson",
-    signature_date: new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
-    // Part 12 - Interpreter
-    used_interpreter: "yes",
-    interpreter_first_name: "Maria",
-    interpreter_last_name: "Garcia",
-    interpreter_business_name: "Garcia Translation Services",
-    interpreter_phone: "(206) 555-7890",
-    interpreter_mobile: "(206) 555-7891",
-    interpreter_email: "maria.garcia@garciatranslations.com",
     interpreter_language: "Spanish",
     interpreter_signature: "Maria Elena Garcia",
     interpreter_signature_date: new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
@@ -1057,9 +1078,18 @@ function buildSampleFormValues(): Partial<FormData> {
     preparer_first_name: "Robert",
     preparer_last_name: "Smith",
     preparer_business_name: "Smith Legal Services & Immigration",
+    preparer_street_address: "1000 First Avenue",
+    preparer_apt_ste_flr: "Floor 10",
+    preparer_city: "Seattle",
+    preparer_state: "WA",
+    preparer_zip_code: "98104",
     preparer_phone: "(206) 555-3456",
     preparer_mobile: "(206) 555-3457",
     preparer_email: "robert.smith@smithlegal.com",
+    preparer_is_attorney: "yes",
+    preparer_accredited_representative: "no",
+    preparer_bar_number: "WA123456",
+    preparer_uscis_accreditation_number: "",
     preparer_signature: "Robert James Smith, Esq.",
     preparer_signature_date: new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
     // Part 14 - Additional Information
@@ -1579,7 +1609,9 @@ export default function N400Form() {
         // PART 5: RESIDENCE INFORMATION
         // ═══════════════════════════════════════════════════════════════
         street_address: data.street_address,
+        apt_type: data.apt_type,
         apt_ste_flr: data.apt_ste_flr,
+        residence_in_care_of: data.residence_in_care_of,
         city: data.city,
         state: data.state,
         zip_code: data.zip_code,
@@ -1593,8 +1625,9 @@ export default function N400Form() {
         mailing_same_as_residence: data.mailing_same_as_residence,
         ...(data.mailing_same_as_residence === "no" && {
           mailing_street_address: data.mailing_street_address,
-        mailing_apt_ste_flr: data.mailing_apt_ste_flr,
-        mailing_in_care_of: data.mailing_in_care_of,
+          mailing_apt_type: data.mailing_apt_type,
+          mailing_apt_ste_flr: data.mailing_apt_ste_flr,
+          mailing_in_care_of: data.mailing_in_care_of,
           mailing_city: data.mailing_city,
           mailing_state: data.mailing_state,
           mailing_zip_code: data.mailing_zip_code,
@@ -1696,6 +1729,7 @@ export default function N400Form() {
 
       // Military/Police Service
       q_military_police_service: data.q_military_police_service,
+      q_served_military_police_unit: data.q_served_military_police_unit,
       q_armed_group: data.q_armed_group,
       q_detention_facility: data.q_detention_facility,
       q_group_used_weapons: data.q_group_used_weapons,
@@ -1782,6 +1816,11 @@ export default function N400Form() {
       interpreter_first_name: data.interpreter_first_name,
       interpreter_last_name: data.interpreter_last_name,
       interpreter_business_name: data.interpreter_business_name,
+      interpreter_street_address: data.interpreter_street_address,
+      interpreter_apt_ste_flr: data.interpreter_apt_ste_flr,
+      interpreter_city: data.interpreter_city,
+      interpreter_state: data.interpreter_state,
+      interpreter_zip_code: data.interpreter_zip_code,
       interpreter_phone: data.interpreter_phone,
       interpreter_mobile: data.interpreter_mobile,
       interpreter_email: data.interpreter_email,
@@ -1796,11 +1835,20 @@ export default function N400Form() {
       preparer_first_name: data.preparer_first_name,
       preparer_last_name: data.preparer_last_name,
       preparer_business_name: data.preparer_business_name,
+      preparer_street_address: data.preparer_street_address,
+      preparer_apt_ste_flr: data.preparer_apt_ste_flr,
+      preparer_city: data.preparer_city,
+      preparer_state: data.preparer_state,
+      preparer_zip_code: data.preparer_zip_code,
       preparer_phone: data.preparer_phone,
       preparer_mobile: data.preparer_mobile,
       preparer_email: data.preparer_email,
       preparer_signature: data.preparer_signature,
       preparer_signature_date: data.preparer_signature_date,
+      preparer_is_attorney: data.preparer_is_attorney,
+      preparer_accredited_representative: data.preparer_accredited_representative,
+      preparer_bar_number: data.preparer_bar_number,
+      preparer_uscis_accreditation_number: data.preparer_uscis_accreditation_number,
 
       // Draft metadata
       current_step: currentStep,
@@ -1882,11 +1930,10 @@ export default function N400Form() {
     // Validate all required fields before submission
     const validationResult = await trigger();
     if (!validationResult) {
-      const errors = formState.errors;
       const errorMessages: string[] = [];
-      
+
       Object.entries(errors).forEach(([fieldName, error]) => {
-        if (error?.message) {
+        if (error && typeof error === 'object' && 'message' in error) {
           errorMessages.push(`${fieldName}: ${error.message}`);
         }
       });
@@ -3150,10 +3197,21 @@ export default function N400Form() {
                   <div className="question-card-title">Current Physical Address</div>
 
                 <div className="form-group">
+                    <label className="form-label">In Care Of (if any)</label>
+                    <input type="text" className="form-input" placeholder="Name of person to receive mail" {...register("residence_in_care_of")} />
+                  </div>
+
+                <div className="form-group">
                     <label className="form-label">Street Address</label>
-                    <div className="form-row" style={{ gridTemplateColumns: "1fr 120px", gap: "12px" }}>
+                    <div className="form-row" style={{ gridTemplateColumns: "1fr 100px 120px", gap: "12px" }}>
                       <input type="text" className="form-input" placeholder="Street Number and Name" {...register("street_address")} />
-                    <input type="text" className="form-input" placeholder="Apt/Ste/Flr" {...register("apt_ste_flr")} />
+                      <select className="form-select" {...register("apt_type")}>
+                        <option value="">Type</option>
+                        <option value="apt">Apt.</option>
+                        <option value="ste">Ste.</option>
+                        <option value="flr">Flr.</option>
+                      </select>
+                    <input type="text" className="form-input" placeholder="Number" {...register("apt_ste_flr")} />
                   </div>
                   {errors.street_address && <p className="error-message">{errors.street_address.message}</p>}
                   </div>
@@ -3209,16 +3267,22 @@ export default function N400Form() {
 
                 {watchedData.mailing_same_as_residence === "no" && (
                     <div style={{ marginTop: "20px", padding: "20px", background: "var(--bg)", borderRadius: "12px" }}>
-                    <div className="form-group">
-                        <label className="form-label">Street Address</label>
-                        <div className="form-row" style={{ gridTemplateColumns: "1fr 120px", gap: "12px" }}>
-                      <input type="text" className="form-input" placeholder="Street Address" {...register("mailing_street_address")} />
-                          <input type="text" className="form-input" placeholder="Apt/Ste/Flr" {...register("mailing_apt_ste_flr")} />
-                    </div>
-                      </div>
                       <div className="form-group">
                         <label className="form-label">In Care Of (if any)</label>
                         <input type="text" className="form-input" placeholder="In Care Of Name" {...register("mailing_in_care_of")} />
+                      </div>
+                    <div className="form-group">
+                        <label className="form-label">Street Address</label>
+                        <div className="form-row" style={{ gridTemplateColumns: "1fr 100px 120px", gap: "12px" }}>
+                      <input type="text" className="form-input" placeholder="Street Address" {...register("mailing_street_address")} />
+                          <select className="form-select" {...register("mailing_apt_type")}>
+                            <option value="">Type</option>
+                            <option value="apt">Apt.</option>
+                            <option value="ste">Ste.</option>
+                            <option value="flr">Flr.</option>
+                          </select>
+                          <input type="text" className="form-input" placeholder="Number" {...register("mailing_apt_ste_flr")} />
+                    </div>
                       </div>
                       <div className="form-row-thirds">
                         <div className="form-group">
@@ -3237,6 +3301,20 @@ export default function N400Form() {
                       <input type="text" className="form-input" placeholder="ZIP" {...register("mailing_zip_code")} />
                       </div>
                     </div>
+                    <div className="form-row-thirds" style={{ marginTop: "12px" }}>
+                        <div className="form-group">
+                          <label className="form-label">Province (if outside US)</label>
+                          <input type="text" className="form-input" placeholder="Province" {...register("mailing_province")} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Postal Code (if outside US)</label>
+                          <input type="text" className="form-input" placeholder="Postal Code" {...register("mailing_postal_code")} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Country</label>
+                          <input type="text" className="form-input" placeholder="Country" {...register("mailing_country")} />
+                        </div>
+                    </div>
                   </div>
                 )}
                 </div>
@@ -3248,6 +3326,54 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 8 && (
               <>
+                {/* Card: Current Employment */}
+                <div className="question-card">
+                  <div className="question-card-title">Current Employment</div>
+                  <p className="helper-text" style={{ marginBottom: "20px" }}>
+                    Provide information about your current or most recent employer. If self-employed, type "Self-Employed". If unemployed, type "Unemployed". If retired, type "Retired".
+                  </p>
+
+                  <div className="form-row-halves">
+                    <div className="form-group">
+                      <label className="form-label">Employer or Company Name</label>
+                      <input type="text" className="form-input" placeholder="Current employer name" {...register("current_employer")} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Your Occupation</label>
+                      <input type="text" className="form-input" placeholder="Your job title or role" {...register("current_occupation")} />
+                    </div>
+                  </div>
+
+                  <div className="form-row-thirds">
+                    <div className="form-group">
+                      <label className="form-label">City</label>
+                      <input type="text" className="form-input" placeholder="City" {...register("employer_city")} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">State</label>
+                      <select className="form-select" {...register("employer_state")}>
+                        <option value="">Select...</option>
+                        {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">ZIP Code</label>
+                      <input type="text" className="form-input" placeholder="ZIP" {...register("employer_zip_code")} />
+                    </div>
+                  </div>
+
+                  <div className="form-row-halves" style={{ marginTop: "12px" }}>
+                    <div className="form-group">
+                      <label className="form-label">Employment Start Date</label>
+                      <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "180px" }} {...register("employment_from")} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Employment End Date</label>
+                      <input type="text" className="form-input" placeholder="PRESENT or MM/DD/YYYY" style={{ maxWidth: "180px" }} {...register("employment_to")} />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Card: Employment & School History */}
                 <div className="question-card">
                   <div className="question-card-title">Employment & School History</div>
@@ -3607,6 +3733,15 @@ export default function N400Form() {
                           <input type="text" className="form-input" placeholder="MM/DD/YYYY" style={{ maxWidth: "200px" }} {...register("spouse_date_of_birth")} />
                   </div>
 
+                        {/* Spouse Country of Birth */}
+                        <div className="form-group">
+                          <label className="form-label">Current Spouse's Country of Birth</label>
+                          <select className="form-select" style={{ maxWidth: "300px" }} {...register("spouse_country_of_birth")}>
+                            <option value="">Select Country...</option>
+                            {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
+
                         {/* Item 4.c: Date Entered into Marriage */}
                         <div className="form-group">
                           <label className="form-label">4.c. Date You Entered into Marriage with Current Spouse (mm/dd/yyyy)</label>
@@ -3918,6 +4053,31 @@ export default function N400Form() {
                       <input type="text" className="form-input" {...register("interpreter_business_name")} />
                       </div>
 
+                      <div className="form-group">
+                        <label className="form-label">Interpreter's Mailing Address</label>
+                        <div className="form-row" style={{ gridTemplateColumns: "1fr 120px", gap: "12px" }}>
+                          <input type="text" className="form-input" placeholder="Street Address" {...register("interpreter_street_address")} />
+                          <input type="text" className="form-input" placeholder="Apt/Ste/Flr" {...register("interpreter_apt_ste_flr")} />
+                        </div>
+                      </div>
+                      <div className="form-row-thirds">
+                        <div className="form-group">
+                          <label className="form-label">City</label>
+                          <input type="text" className="form-input" placeholder="City" {...register("interpreter_city")} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">State</label>
+                          <select className="form-select" {...register("interpreter_state")}>
+                            <option value="">Select...</option>
+                            {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">ZIP Code</label>
+                          <input type="text" className="form-input" placeholder="ZIP" {...register("interpreter_zip_code")} />
+                        </div>
+                      </div>
+
                     <div className="form-row-equal">
                       <div className="form-group">
                           <label className="form-label">3. {labelFor("interpreter_phone", "Interpreter's Daytime Telephone Number")}</label>
@@ -4006,6 +4166,31 @@ export default function N400Form() {
                       <input type="text" className="form-input" {...register("preparer_business_name")} />
                 </div>
 
+                      <div className="form-group">
+                        <label className="form-label">Preparer's Mailing Address</label>
+                        <div className="form-row" style={{ gridTemplateColumns: "1fr 120px", gap: "12px" }}>
+                          <input type="text" className="form-input" placeholder="Street Address" {...register("preparer_street_address")} />
+                          <input type="text" className="form-input" placeholder="Apt/Ste/Flr" {...register("preparer_apt_ste_flr")} />
+                        </div>
+                      </div>
+                      <div className="form-row-thirds">
+                        <div className="form-group">
+                          <label className="form-label">City</label>
+                          <input type="text" className="form-input" placeholder="City" {...register("preparer_city")} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">State</label>
+                          <select className="form-select" {...register("preparer_state")}>
+                            <option value="">Select...</option>
+                            {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">ZIP Code</label>
+                          <input type="text" className="form-input" placeholder="ZIP" {...register("preparer_zip_code")} />
+                        </div>
+                      </div>
+
                     <div className="form-row-equal">
                       <div className="form-group">
                           <label className="form-label">3. {labelFor("preparer_phone", "Preparer's Daytime Telephone Number")}</label>
@@ -4023,6 +4208,33 @@ export default function N400Form() {
                         <label className="form-label">5. {labelFor("preparer_email", "Preparer's Email Address (if any)")}</label>
                         {renderQuestionGuidance("preparer_email")}
                       <input type="email" className="form-input" placeholder="preparer@example.com" {...register("preparer_email")} />
+                    </div>
+
+                    {/* Preparer Credentials */}
+                    <div className="form-group" style={{ marginTop: "24px" }}>
+                      <label className="form-label">Preparer Credentials</label>
+                      <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
+                        <div className="form-row-halves">
+                          <div className="form-group">
+                            <YesNoField name="preparer_is_attorney" metaId="preparer_is_attorney" label="Is the preparer an attorney or accredited representative?" />
+                          </div>
+                          <div className="form-group">
+                            <YesNoField name="preparer_accredited_representative" metaId="preparer_accredited_representative" label="Is the preparer a DOJ accredited representative?" />
+                          </div>
+                        </div>
+                        {watchedData.preparer_is_attorney === "yes" && (
+                          <div className="form-group" style={{ marginTop: "12px" }}>
+                            <label className="form-label">Attorney Bar Number</label>
+                            <input type="text" className="form-input" placeholder="State Bar Number" style={{ maxWidth: "250px" }} {...register("preparer_bar_number")} />
+                          </div>
+                        )}
+                        {watchedData.preparer_accredited_representative === "yes" && (
+                          <div className="form-group" style={{ marginTop: "12px" }}>
+                            <label className="form-label">USCIS Accreditation Number</label>
+                            <input type="text" className="form-input" placeholder="Accreditation Number" style={{ maxWidth: "250px" }} {...register("preparer_uscis_accreditation_number")} />
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="form-group" style={{ marginTop: "24px" }}>
@@ -4343,7 +4555,7 @@ export default function N400Form() {
                         }
 
                         const formId = draftResult.data.id;
-                        setSubmittedId(formId);
+                        setSubmittedId(formId ?? null);
                         
                         // Check if payment was already completed for this form
                         const { data: formData, error: formError } = await supabase

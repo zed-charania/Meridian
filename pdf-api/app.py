@@ -55,12 +55,27 @@ def safe_get_array(data: dict, key: str, default=None):
 def map_form_data_to_pdf_fields(data: dict) -> dict:
     """
     Map intake form data to PDF field names with correct checkbox states.
+
+    Intake fields with no PDF equivalent in this N-400 template (not mapped):
+    - request_disability_accommodations (form has no separate accommodation-request field)
+    - employment_to for row 1 (PDF has no P7_To1; only rows 2/3 have To date)
+    - total_days_outside_us, trips_over_6_months (no matching text/checkbox in this PDF)
+    - spouse_is_us_citizen, spouse_country_of_birth (covered indirectly via 5a/5b)
+    - q_failed_to_file_taxes (no "failed to file" question in this N-400; P9_Line3 is "owe taxes")
+    - q_advocated_overthrow (q_served_military_police_unit maps with q_military_police_service to P9_Line8a)
+    - q_willing_take_oath, q_willing_noncombatant, q_willing_work_national_importance
+      (oath items 34-37 share checkbox group; only bear arms/understand oath have distinct fields)
+    - interpreter/preparer address (street, city, state, zip): PDF has name, biz, phone, email only
+    - preparer_is_attorney, preparer_accredited_representative, preparer_bar_number (no fields in template)
+
+    Template variable names may differ from intake names. See test-output/pdf_field_reference.json
+    for all 488 PDF field names and their full descriptions (search "tu" for concepts).
     """
     fields = {}
 
     # Helper for Yes/No checkboxes
     def set_yes_no(field_base: str, value: str, yes_idx: int = 1, no_idx: int = 0):
-        """Set Yes/No checkbox. Default: [0]=No, [1]=Yes. Some are reversed."""
+        """Set Yes/No checkbox. Default: [0]=No, [1]=Yes. Some reversed. Yes uses /Y; No uses /N (PDF export values)."""
         if value:
             value_lower = str(value).lower().strip()
             if value_lower == "yes":
@@ -107,6 +122,10 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
 
     if eligibility == "other" and data.get("other_basis_reason"):
         fields["form1[0].#subform[0].Part1Line5_OtherExplain[0]"] = data["other_basis_reason"]
+
+    # USCIS Field Office (e.g. for INA 319(b) filers)
+    if data.get("uscis_field_office"):
+        fields["form1[0].#subform[0].DropDownList1[0]"] = data["uscis_field_office"]
 
     # ═══════════════════════════════════════════════════════════════
     # PART 2: PERSONAL INFO (Pages 1-2)
@@ -177,10 +196,11 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     if country_of_citizenship:
         fields["form1[0].#subform[1].P2_Line11_CountryOfNationality[0]"] = country_of_citizenship
 
-    # Q10 - Disability Accommodations
-    if data.get("request_disability_accommodations") == "yes":
+    # Q10 - Was your mother or father a U.S. citizen before your 18th birthday?
+    # (P2_Line10_claimdisability is parent citizenship, NOT disability accommodations)
+    if data.get("parent_us_citizen_before_18") == "yes":
         fields["form1[0].#subform[1].P2_Line10_claimdisability[1]"] = "/Y"
-    elif data.get("request_disability_accommodations") == "no":
+    elif data.get("parent_us_citizen_before_18") == "no":
         fields["form1[0].#subform[1].P2_Line10_claimdisability[0]"] = "/N"
 
     # Q11 - Disability preventing English/civics
@@ -211,6 +231,10 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     # ═══════════════════════════════════════════════════════════════
     if data.get("street_address"):
         fields["form1[0].#subform[2].P4_Line1_StreetName[0]"] = data["street_address"]
+    if data.get("residence_in_care_of"):
+        fields["form1[0].#subform[2].P4_Line1_InCareOfName[0]"] = data["residence_in_care_of"]
+    elif data.get("mailing_same_as_residence") == "yes" and data.get("mailing_in_care_of"):
+        fields["form1[0].#subform[2].P4_Line1_InCareOfName[0]"] = data["mailing_in_care_of"]
 
     # Apt/Ste/Flr checkboxes
     apt_type = data.get("apt_type", "").lower()
@@ -256,17 +280,18 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         fields["form1[0].#subform[2].P4_Line1_DatesofResidence[1]"] = format_date(data["residence_from"])
     if data.get("residence_to"):
         to_val = data["residence_to"]
-        # If "Present", leave the prefilled form value untouched
-        if isinstance(to_val, str) and to_val.upper() != "PRESENT":
+        if isinstance(to_val, str) and to_val.upper() == "PRESENT":
+            fields["form1[0].#subform[2].P4_Line1_DatesofResidence[0]"] = "Present"
+        else:
             fields["form1[0].#subform[2].P4_Line1_DatesofResidence[0]"] = format_date(to_val)
 
     # Part 4.2 - Is your current physical address also your current mailing address?
     # This checkbox determines if Part 4.3 (mailing address) is required
     mailing_same = data.get("mailing_same_as_residence", "")
     if mailing_same == "yes":
-        fields["form1[0].#subform[2].P4_Line2[1]"] = "/Y"
+        fields["form1[0].#subform[2].Pt3_Line2a_Checkbox[1]"] = "/Y"
     elif mailing_same == "no":
-        fields["form1[0].#subform[2].P4_Line2[0]"] = "/N"
+        fields["form1[0].#subform[2].Pt3_Line2a_Checkbox[0]"] = "/N"
 
     # Part 4.3 - Mailing address fields (only required if Part 4.2 is "no")
     # If Part 4.2 is "yes", skip to Part 5 (mailing address fields should be empty)
@@ -287,7 +312,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if data.get("mailing_city"):
             fields["form1[0].#subform[3].P5_Line1b_City[0]"] = data["mailing_city"]
         if data.get("mailing_state"):
-            fields["form1[0].#subform[3].P5_Line1b_State[0]"] = data["mailing_state"]
+            fields["form1[0].#subform[3].P4_Line1_State[1]"] = data["mailing_state"]
         if data.get("mailing_zip_code"):
             fields["form1[0].#subform[3].P5_Line1b_ZipCode[0]"] = data["mailing_zip_code"]
         if data.get("mailing_province"):
@@ -523,13 +548,15 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     state1 = emp1.get("state") or data.get("employer_state", "")
     if state1:
         fields["form1[0].#subform[4].P7_State1[0]"] = state1
-    if emp1.get("zip_code"):
-        fields["form1[0].#subform[4].P7_ZipCode1[0]"] = emp1["zip_code"]
+    zip1 = emp1.get("zip_code") or data.get("employer_zip_code", "")
+    if zip1:
+        fields["form1[0].#subform[4].P7_ZipCode1[0]"] = zip1
     if emp1.get("country"):
         fields["form1[0].#subform[4].P7_Country1[0]"] = emp1["country"]
     from1 = emp1.get("dates_from") or data.get("employment_from", "")
     if from1:
         fields["form1[0].#subform[4].P7_From1[1]"] = format_date(from1)
+    # Note: PDF has no P7_To1 for employment 1 "To" date; only rows 2/3 have To fields
 
     # Employment 2
     if len(employment_history) > 1 and isinstance(employment_history[1], dict):
@@ -598,8 +625,9 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     set_yes_no("form1[0].#subform[5].P9_Line1", data.get("q_claimed_us_citizen", ""))
     set_yes_no("form1[0].#subform[5].P9_Line2", data.get("q_voted_in_us", ""))
     # Q3/Q4 have reversed states: [0]=Y, [1]=N
-    set_yes_no("form1[0].#subform[5].P9_Line3", data.get("q_failed_to_file_taxes", ""), yes_idx=0, no_idx=1)
-    set_yes_no("form1[0].#subform[5].P9_Line4", data.get("q_owe_taxes", ""), yes_idx=0, no_idx=1)
+    # P9_Line3 = Q3 "owe overdue taxes"; P9_Line4 = Q4 "nonresident on tax return"
+    set_yes_no("form1[0].#subform[5].P9_Line3", data.get("q_owe_taxes", ""), yes_idx=0, no_idx=1)
+    set_yes_no("form1[0].#subform[5].P9_Line4", data.get("q_nonresident_alien_tax", ""), yes_idx=0, no_idx=1)
     # Q5 Communist/Totalitarian
     set_yes_no("form1[0].#subform[5].P9_5a", data.get("q_communist_party", ""), yes_idx=0, no_idx=1)
     set_yes_no("form1[0].#subform[5].P9_5b", data.get("q_terrorist_org", ""), yes_idx=0, no_idx=1)
@@ -628,7 +656,8 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     set_yes_no("form1[0].#subform[6].P9_Line7\\.g", data.get("q_harm_race_religion", ""))
 
     # Q8.a - Military/police service
-    set_yes_no("form1[0].#subform[6].P9_Line8a", data.get("q_military_police_service", ""))
+    # Q8.a - Military/police service (intake may use q_military_police_service or q_served_military_police_unit)
+    set_yes_no("form1[0].#subform[6].P9_Line8a", data.get("q_military_police_service") or data.get("q_served_military_police_unit", ""))
     # Q8.b - Armed group
     set_yes_no("form1[0].#subform[6].P9_Line8b", data.get("q_armed_group", ""))
 
@@ -651,121 +680,133 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     # Q14 - Used under 15 in hostilities
     set_yes_no("form1[0].#subform[6].P9_Line14", data.get("q_used_under_15_hostilities", ""))
 
-    # --- Page 8 (subform[7] and subform[8]) Q15-16, Q22 ---
-    # Q15.a - Committed crime not arrested
-    set_yes_no("form1[0].#subform[8].P12_Line20", data.get("q_committed_crime_not_arrested", ""))
-    # Q15.b - Arrested
-    set_yes_no("form1[0].#subform[8].P12_Line21", data.get("q_arrested", ""))
+    # --- Page 8 (subform[7]) Q15, Q22 ---
+    # Q15.a - Committed crime not arrested (CORRECTED: was using wrong subform)
+    set_yes_no("form1[0].#subform[7].P9_Line15a", data.get("q_committed_crime_not_arrested", ""))
+    # Q15.b - Arrested (CORRECTED)
+    set_yes_no("form1[0].#subform[7].P9_Line15b", data.get("q_arrested", ""))
 
-    # Q15.c - Crime details table (up to 4 entries on form)
+    # Crime details table (up to 5 entries - CORRECTED field names)
     crimes = safe_get_array(data, "crimes", [])
     if crimes:
-        for i, crime in enumerate(crimes[:4]):  # PDF has space for 4 crime entries
+        for i, crime in enumerate(crimes[:5]):  # PDF has space for 5 crime entries
             if not isinstance(crime, dict):
                 continue
             idx = i + 1
+            # Crime description/what was the offense
             if crime.get("crime_description"):
-                fields[f"form1[0].#subform[7].P12_Crime{idx}_Nature[0]"] = crime["crime_description"]
+                fields[f"form1[0].#subform[7].P12_Line29_why{idx}[0]"] = crime["crime_description"]
+            # Date of crime
             if crime.get("date_of_crime"):
-                fields[f"form1[0].#subform[7].P12_Crime{idx}_Date[0]"] = format_date(crime["date_of_crime"])
-            if crime.get("place_of_crime"):
-                fields[f"form1[0].#subform[7].P12_Crime{idx}_Location[0]"] = crime["place_of_crime"]
+                fields[f"form1[0].#subform[7].P12_Line29_Date{idx}[0]"] = format_date(crime["date_of_crime"])
+            # Date of conviction
+            if crime.get("date_of_conviction"):
+                fields[f"form1[0].#subform[7].P12_Line29_DateOfConv{idx}[0]"] = format_date(crime["date_of_conviction"])
+            # Result/disposition, place, sentence - Outcome[0/1/2] are text fields
             if crime.get("result_disposition"):
-                fields[f"form1[0].#subform[7].P12_Crime{idx}_Outcome[0]"] = crime["result_disposition"]
+                fields[f"form1[0].#subform[7].P12_Line29_Outcome{idx}[0]"] = crime["result_disposition"]
+            if crime.get("place_of_crime"):
+                fields[f"form1[0].#subform[7].P12_Line29_Outcome{idx}[1]"] = crime["place_of_crime"]
             if crime.get("sentence"):
-                fields[f"form1[0].#subform[7].P12_Crime{idx}_Sentence[0]"] = crime["sentence"]
+                fields[f"form1[0].#subform[7].P12_Line29_Outcome{idx}[2]"] = crime["sentence"]
 
-    # Q18 - False info to govt
-    set_yes_no("form1[0].#subform[8].P12_Line23", data.get("q_false_info_us_government", ""))
-    # Q19 - Lied to govt
-    set_yes_no("form1[0].#subform[8].P12_Line24", data.get("q_lied_us_government", ""))
-    # Q20 - Removed/deported
-    set_yes_no("form1[0].#subform[8].P12_Line25", data.get("q_removed_deported", ""))
+    # Q16 - Completed probation (P12_Line16 on subform[7])
+    set_yes_no("form1[0].#subform[7].P12_Line16", data.get("q_completed_probation", ""))
 
-    # Q22.a - Male 18-26
-    set_yes_no("form1[0].#subform[7].P12_Line16", data.get("q_male_18_26_lived_us", ""))
+    # Q22.a - Male 18-26 lived in US (P9_Line22a on subform[8], NOT P12_Line16)
 
-    # --- Page 9 (subform[9]) Q25-29, Q30-37 ---
-    # Q25 - Served US military (REVERSED: [0]=Y, [1]=N)
-    set_yes_no("form1[0].#subform[9].P12_Line33", data.get("q_served_us_military", ""), yes_idx=0, no_idx=1)
-    # Q27 - Court martialed
-    set_yes_no("form1[0].#subform[9].P12_Line27", data.get("q_court_martialed", ""))
-    # Q28 - Discharged because alien
-    set_yes_no("form1[0].#subform[9].P12_Line28", data.get("q_discharged_because_alien", ""))
-    # Q29 - Deserted
-    set_yes_no("form1[0].#subform[9].P12_Line34", data.get("q_deserted_military", ""))
+    # --- Page 9 (subform[8]) Q17-24 ---
 
-    # Q17 - Prostitution (REVERSED: [0]=Y, [1]=N)
-    set_yes_no("form1[0].#subform[9].P12_Line30a", data.get("q_prostitution", ""), yes_idx=0, no_idx=1)
-    # Q17 - Controlled substances (REVERSED)
-    set_yes_no("form1[0].#subform[9].P12_Line30b", data.get("q_controlled_substances", ""), yes_idx=0, no_idx=1)
+    # Q17.a - Prostitution (P11_Line17A)
+    set_yes_no("form1[0].#subform[8].P11_Line17A", data.get("q_prostitution", ""))
+    # Q17.b - Controlled substances (P11_Line17B)
+    set_yes_no("form1[0].#subform[8].P11_Line17B", data.get("q_controlled_substances", ""))
+    # Q17.c - Polygamy / married to more than one person (P11_Line17C)
+    set_yes_no("form1[0].#subform[8].P11_Line17C", data.get("q_polygamy", ""))
 
-    # Q17 - Gambling
-    set_yes_no("form1[0].#subform[9].P12_Line31", data.get("q_illegal_gambling", ""))
-    # Q17 - Failed child support (REVERSED: [0]=Y, [1]=N)
-    set_yes_no("form1[0].#subform[9].P12_Line32", data.get("q_failed_child_support", ""), yes_idx=0, no_idx=1)
+    # Q17.d - Marriage fraud (P12_Line17d)
+    set_yes_no("form1[0].#subform[8].P12_Line17d", data.get("q_marriage_fraud", ""))
+    # Q17.e - Helped illegal entry (P12_Line17e)
+    set_yes_no("form1[0].#subform[8].P12_Line17e", data.get("q_helped_illegal_entry", ""))
+    # Q17.f - Illegal gambling (P12_Line17f: [0]=Yes, [1]=No - TU bug shows both "Select Yes")
+    set_yes_no("form1[0].#subform[8].P12_Line17f", data.get("q_illegal_gambling", ""), yes_idx=0, no_idx=1)
+    # Q17.g - Failed child support (P12_Line17g)
+    set_yes_no("form1[0].#subform[8].P12_Line17g", data.get("q_failed_child_support", ""))
+    # Q17.h - Misrepresentation public benefits (P12_Line17h)
+    set_yes_no("form1[0].#subform[8].P12_Line17h", data.get("q_misrepresentation_public_benefits", ""))
 
-    # Q31 - Support constitution (REVERSED: [0]=Y, [1]=N)
-    set_yes_no("form1[0].#subform[9].P12_Line35", data.get("q_support_constitution", ""), yes_idx=0, no_idx=1)
-    # Q34 - Willing take oath
-    set_yes_no("form1[0].#subform[9].P12_Line36", data.get("q_willing_take_oath", ""))
-    # Q35 - Bear arms (REVERSED: [0]=Y, [1]=N)
-    set_yes_no("form1[0].#subform[9].P12_Line37", data.get("q_willing_bear_arms", ""), yes_idx=0, no_idx=1)
-    # Q36 - Willing noncombatant
-    set_yes_no("form1[0].#subform[9].P12_Line38", data.get("q_willing_noncombatant", ""))
-    # Q37 - Willing work national importance
-    set_yes_no("form1[0].#subform[9].P12_Line39", data.get("q_willing_work_national_importance", ""))
+    # Q18 - False info to govt (P12_Line18: [0]=Yes, [1]=No - TU bug shows both "Select Yes")
+    set_yes_no("form1[0].#subform[8].P12_Line18", data.get("q_false_info_us_government", ""), yes_idx=0, no_idx=1)
+    # Q19 - Lied to govt (P12_Line19: [0]=Yes, [1]=No)
+    set_yes_no("form1[0].#subform[8].P12_Line19", data.get("q_lied_us_government", ""), yes_idx=0, no_idx=1)
+    # Q20 - Removal proceedings (P12_Line20)
+    set_yes_no("form1[0].#subform[8].P12_Line20", data.get("q_removal_proceedings", ""))
+    # Q21 - Removed/deported (P12_Line21)
+    set_yes_no("form1[0].#subform[8].P12_Line21", data.get("q_removed_deported", ""))
 
-    # --- Additional Missing Fields ---
-    # Q4.c - Nonresident alien tax
-    set_yes_no("form1[0].#subform[5].P9_Line4c", data.get("q_nonresident_alien_tax", ""))
-    # Q5.b - Advocated overthrow
-    set_yes_no("form1[0].#subform[5].P9_5c", data.get("q_advocated_overthrow", ""))
-    # Q16 - Completed probation
-    set_yes_no("form1[0].#subform[8].P12_Line22", data.get("q_completed_probation", ""))
-    # Q17.c - Marriage fraud
-    set_yes_no("form1[0].#subform[9].P12_Line30c", data.get("q_marriage_fraud", ""))
-    # Q17.d - Polygamy
-    set_yes_no("form1[0].#subform[9].P12_Line30d", data.get("q_polygamy", ""))
-    # Q17.e - Helped illegal entry
-    set_yes_no("form1[0].#subform[9].P12_Line30e", data.get("q_helped_illegal_entry", ""))
-    # Q17.h - Misrepresentation public benefits
-    set_yes_no("form1[0].#subform[9].P12_Line30h", data.get("q_misrepresentation_public_benefits", ""))
-    # Q21 - Removal proceedings
-    set_yes_no("form1[0].#subform[8].P12_Line26", data.get("q_removal_proceedings", ""))
-    # Q22.b - Registered selective service
-    set_yes_no("form1[0].#subform[7].P12_Line17", data.get("q_registered_selective_service", ""))
-    # Q22.c - Selective service number
+    # Q22.a - Male 18-26 lived in US (P9_Line22a)
+    set_yes_no("form1[0].#subform[8].P9_Line22a", data.get("q_male_18_26_lived_us", ""))
+    # Q22.b - Registered selective service (Pt9_Line22b)
+    set_yes_no("form1[0].#subform[8].Pt9_Line22b", data.get("q_registered_selective_service", ""))
+    # Q22.c - Selective service number (CORRECTED field name)
     if data.get("selective_service_number"):
-        fields["form1[0].#subform[7].P12_Line18_SSNumber[0]"] = data["selective_service_number"]
-    # Q22.d - Selective service date
+        fields["form1[0].#subform[8].P9_Line22c_SSNumber[0]"] = data["selective_service_number"]
+    # Q22.c - Selective service date (CORRECTED field name)
     if data.get("selective_service_date"):
-        fields["form1[0].#subform[7].P12_Line18_SSDate[0]"] = format_date(data["selective_service_date"])
-    # Q23 - Left US avoid draft
-    set_yes_no("form1[0].#subform[7].P12_Line19", data.get("q_left_us_avoid_draft", ""))
-    # Q24 - Applied military exemption
-    set_yes_no("form1[0].#subform[7].P12_Line20", data.get("q_applied_military_exemption", ""))
-    # Q26.a - Current military member
-    set_yes_no("form1[0].#subform[9].P12_Line33a", data.get("q_current_military_member", ""))
-    # Q26.b - Scheduled deploy
-    set_yes_no("form1[0].#subform[9].P12_Line33b", data.get("q_scheduled_deploy", ""))
-    # Q26.c - Stationed outside US
-    set_yes_no("form1[0].#subform[9].P12_Line33c", data.get("q_stationed_outside_us", ""))
-    # Q26.d - Former military outside US
-    set_yes_no("form1[0].#subform[9].P12_Line33d", data.get("q_former_military_outside_us", ""))
-    # Q30.a - Title of nobility
-    set_yes_no("form1[0].#subform[9].P12_Line29a", data.get("q_title_of_nobility", ""))
-    # Q30.b - Willing to give up titles
-    set_yes_no("form1[0].#subform[9].P12_Line29b", data.get("q_willing_to_give_up_titles", ""))
-    # Q30.c - List of titles
+        fields["form1[0].#subform[8].P9_Line22c_Date[0]"] = format_date(data["selective_service_date"])
+
+    # Q23 - Left US avoid draft (P12_Line23)
+    set_yes_no("form1[0].#subform[8].P12_Line23", data.get("q_left_us_avoid_draft", ""))
+    # Q24 - Applied military exemption (P12_Line24)
+    set_yes_no("form1[0].#subform[8].P12_Line24", data.get("q_applied_military_exemption", ""))
+
+    # --- Page 9 (subform[8]) Q25 ---
+    # Q25 - Served US military (P12_Line25)
+    set_yes_no("form1[0].#subform[8].P12_Line25", data.get("q_served_us_military", ""))
+
+    # --- Page 10 (subform[9]) Q26-37 ---
+
+    # Q26.a - Current military member (CORRECTED: P12_Line26a)
+    set_yes_no("form1[0].#subform[9].P12_Line26a", data.get("q_current_military_member", ""))
+    # Q26.b - Scheduled deploy (CORRECTED: P12_Line26b)
+    set_yes_no("form1[0].#subform[9].P12_Line26b", data.get("q_scheduled_deploy", ""))
+    # Q26.c - Stationed outside US (CORRECTED: P12_Line26c)
+    set_yes_no("form1[0].#subform[9].P12_Line26c", data.get("q_stationed_outside_us", ""))
+    # Q26.d - Former military outside US (CORRECTED: P11_Line26d)
+    set_yes_no("form1[0].#subform[9].P11_Line26d", data.get("q_former_military_outside_us", ""))
+
+    # Q27 - Court martialed (P12_Line27: [0]=Yes, [1]=No)
+    set_yes_no("form1[0].#subform[9].P12_Line27", data.get("q_court_martialed", ""), yes_idx=0, no_idx=1)
+    # Q28 - Discharged because alien (P12_Line28: [0]=Yes, [1]=No)
+    set_yes_no("form1[0].#subform[9].P12_Line28", data.get("q_discharged_because_alien", ""), yes_idx=0, no_idx=1)
+    # Q29 - Deserted (P9_Line29)
+    set_yes_no("form1[0].#subform[9].P9_Line29", data.get("q_deserted_military", ""))
+
+    # Q30.a - Title of nobility (P12_Line30a: [0]=Yes, [1]=No)
+    set_yes_no("form1[0].#subform[9].P12_Line30a", data.get("q_title_of_nobility", ""), yes_idx=0, no_idx=1)
+    # Q30.b - Willing to give up titles (P12_Line30b: [0]=Yes, [1]=No)
+    set_yes_no("form1[0].#subform[9].P12_Line30b", data.get("q_willing_to_give_up_titles", ""), yes_idx=0, no_idx=1)
     if data.get("q_titles_list"):
-        fields["form1[0].#subform[9].P12_Line29c_TitlesList[0]"] = data["q_titles_list"]
-    # Q32 - Understand oath
-    set_yes_no("form1[0].#subform[9].P12_Line35b", data.get("q_understand_oath", ""))
-    # Q33 - Unable oath disability
-    set_yes_no("form1[0].#subform[9].P12_Line35c", data.get("q_unable_oath_disability", ""))
-    # Habitual drunkard (Q17 category)
-    set_yes_no("form1[0].#subform[9].P12_Line30_habitual", data.get("q_habitual_drunkard", ""))
+        fields["form1[0].#subform[9].P9_NobilityTitles[0]"] = data["q_titles_list"]
+    # The question on the form combines 30.a and 30.b with the titles list inline
+
+    # Q31 - Support constitution (P12_Line31)
+    set_yes_no("form1[0].#subform[9].P12_Line31", data.get("q_support_constitution", ""))
+    # Q32 - Understand oath (P12_Line32: [0]=Yes, [1]=No)
+    set_yes_no("form1[0].#subform[9].P12_Line32", data.get("q_understand_oath", ""), yes_idx=0, no_idx=1)
+    # Q33 - Unable to take Oath because of disability (P12_Line33: [0]=Yes, [1]=No)
+    set_yes_no("form1[0].#subform[9].P12_Line33", data.get("q_unable_oath_disability", ""), yes_idx=0, no_idx=1)
+    # Q34 - Willing to take full Oath (P12_Line34[0]=No, [1]=Yes)
+    set_yes_no("form1[0].#subform[9].P12_Line34", data.get("q_willing_take_oath", ""))
+    # Q35 - Willing to bear arms (P12_Line35: [0]=Yes, [1]=No)
+    set_yes_no("form1[0].#subform[9].P12_Line35", data.get("q_willing_bear_arms", ""), yes_idx=0, no_idx=1)
+    # Q36 - Willing to perform noncombatant services (P12_Line36[0]=No, [1]=Yes)
+    set_yes_no("form1[0].#subform[9].P12_Line36", data.get("q_willing_noncombatant", ""))
+    # Q37 - Willing to perform work of national importance (P12_Line37: [0]=Yes, [1]=No)
+    set_yes_no("form1[0].#subform[9].P12_Line37", data.get("q_willing_work_national_importance", ""), yes_idx=0, no_idx=1)
+
+    # Note: Moral character Q17 (prostitution, controlled substances, gambling, child support)
+    # are on subform[8] only (P11_Line17A/B/C, P12_Line17f/g), not duplicated on subform[9]
 
     # ═══════════════════════════════════════════════════════════════
     # PART 13: CONTACT INFO (Page 11)
@@ -785,8 +826,14 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     applicant_signature = data.get("applicant_signature")
     if applicant_signature:
         fields["form1[0].#subform[10].P12_SignatureApplicant[0]"] = applicant_signature
+        # Part 15/16 duplicate signature blocks (Signature at Interview, Oath of Allegiance)
+        fields["form1[0].#subform[13].ApplicantsSignature[0]"] = applicant_signature
+        fields["form1[0].#subform[13].Part15ApplicantsSignature[0]"] = applicant_signature
+    if signature_date:
+        fields["form1[0].#subform[13].Part15DateofSignature[0]"] = format_date(signature_date)
+        fields["form1[0].#subform[13].Part15DateofSignature[1]"] = format_date(signature_date)
 
-    # Fee Reduction
+    # Fee Reduction (P10_Line1_Citizen: [0]=No, [1]=Yes)
     if data.get("fee_reduction_requested") == "yes":
         fields["form1[0].#subform[10].P10_Line1_Citizen[1]"] = "/Y"
     elif data.get("fee_reduction_requested") == "no":
@@ -797,7 +844,9 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
     if data.get("household_size"):
         fields["form1[0].#subform[10].P10_Line3_HouseHoldSize[0]"] = str(data["household_size"])
     if data.get("household_income_earners"):
-        fields["form1[0].#subform[10].P10_Line4_TotalNumber[0]"] = str(data["household_income_earners"])
+        # Q4 "Total number of household members earning income" = P11_Line1_TotalChildren[1] on subform[10]
+        fields["form1[0].#subform[10].P11_Line1_TotalChildren[1]"] = str(data["household_income_earners"])
+    # Q5 "I reside in a household" (P10_Line5a: [0]=No, [1]=Yes)
     if data.get("is_head_of_household") == "yes":
         fields["form1[0].#subform[10].P10_Line5a[1]"] = "/Y"
     elif data.get("is_head_of_household") == "no":
@@ -824,7 +873,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if data.get("interpreter_language"):
             fields["form1[0].#subform[11].P14_NameOfLanguage[0]"] = data["interpreter_language"]
         if data.get("interpreter_signature"):
-            fields["form1[0].#subform[11].P14_Signature[0]"] = data["interpreter_signature"]
+            fields["form1[0].#subform[11].P12_SignatureApplicant[1]"] = data["interpreter_signature"]
         if data.get("interpreter_signature_date"):
             fields["form1[0].#subform[11].P14_DateofSignature[0]"] = format_date(data["interpreter_signature_date"])
 
@@ -845,7 +894,7 @@ def map_form_data_to_pdf_fields(data: dict) -> dict:
         if data.get("preparer_email"):
             fields["form1[0].#subform[11].P15_Line6_Email[0]"] = data["preparer_email"]
         if data.get("preparer_signature"):
-            fields["form1[0].#subform[11].P15_Signature[0]"] = data["preparer_signature"]
+            fields["form1[0].#subform[11].P12_SignatureApplicant[2]"] = data["preparer_signature"]
         if data.get("preparer_signature_date"):
             fields["form1[0].#subform[11].P15_DateofSignature[0]"] = format_date(data["preparer_signature_date"])
 

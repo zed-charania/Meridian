@@ -65,6 +65,7 @@ export interface N400FormData {
 
   // Disability Accommodations
   request_disability_accommodations?: string;
+  disability_prevents_english?: string;
 
   // ═══════════════════════════════════════════════════════════════
   // PART 4: CONTACT INFORMATION
@@ -78,10 +79,14 @@ export interface N400FormData {
   // ═══════════════════════════════════════════════════════════════
   // Current Address
   street_address: string;
+  apt_type?: string;
   apt_ste_flr?: string;
+  residence_in_care_of?: string;
   city: string;
   state: string;
   zip_code: string;
+  residence_province?: string;
+  residence_postal_code?: string;
   residence_from?: string;
   residence_to?: string;
   residence_addresses?: string; // JSON stringified array
@@ -89,11 +94,15 @@ export interface N400FormData {
   // Mailing Address (if different)
   mailing_same_as_residence?: string;
   mailing_street_address?: string;
+  mailing_apt_type?: string;
   mailing_apt_ste_flr?: string;
   mailing_in_care_of?: string;
   mailing_city?: string;
   mailing_state?: string;
   mailing_zip_code?: string;
+  mailing_province?: string;
+  mailing_postal_code?: string;
+  mailing_country?: string;
 
   // ═══════════════════════════════════════════════════════════════
   // PART 7: BIOGRAPHIC INFORMATION
@@ -186,6 +195,7 @@ export interface N400FormData {
 
   // Military/Police Service
   q_military_police_service?: string;
+  q_served_military_police_unit?: string;
   q_armed_group?: string;
   q_detention_facility?: string;
   q_group_used_weapons?: string;
@@ -248,6 +258,63 @@ export interface N400FormData {
 
   // Additional Information
   additional_information?: string; // JSON stringified array
+
+  // ═══════════════════════════════════════════════════════════════
+  // FEE REDUCTION
+  // ═══════════════════════════════════════════════════════════════
+  fee_reduction_requested?: string;
+  household_income?: string;
+  household_size?: string;
+  household_income_earners?: string;
+  is_head_of_household?: string;
+  head_of_household_name?: string;
+
+  // ═══════════════════════════════════════════════════════════════
+  // APPLICANT SIGNATURE
+  // ═══════════════════════════════════════════════════════════════
+  applicant_signature?: string;
+  signature_date?: string;
+
+  // ═══════════════════════════════════════════════════════════════
+  // INTERPRETER
+  // ═══════════════════════════════════════════════════════════════
+  used_interpreter?: string;
+  interpreter_first_name?: string;
+  interpreter_last_name?: string;
+  interpreter_business_name?: string;
+  interpreter_street_address?: string;
+  interpreter_apt_ste_flr?: string;
+  interpreter_city?: string;
+  interpreter_state?: string;
+  interpreter_zip_code?: string;
+  interpreter_phone?: string;
+  interpreter_mobile?: string;
+  interpreter_email?: string;
+  interpreter_language?: string;
+  interpreter_signature?: string;
+  interpreter_signature_date?: string;
+
+  // ═══════════════════════════════════════════════════════════════
+  // PREPARER
+  // ═══════════════════════════════════════════════════════════════
+  used_preparer?: string;
+  preparer_first_name?: string;
+  preparer_last_name?: string;
+  preparer_business_name?: string;
+  preparer_street_address?: string;
+  preparer_apt_ste_flr?: string;
+  preparer_city?: string;
+  preparer_state?: string;
+  preparer_zip_code?: string;
+  preparer_phone?: string;
+  preparer_mobile?: string;
+  preparer_email?: string;
+  preparer_signature?: string;
+  preparer_signature_date?: string;
+  preparer_is_attorney?: string;
+  preparer_accredited_representative?: string;
+  preparer_bar_number?: string;
+  preparer_uscis_accreditation_number?: string;
 
   // ═══════════════════════════════════════════════════════════════
   // METADATA
