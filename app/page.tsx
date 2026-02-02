@@ -1182,17 +1182,16 @@ export default function LandingPage() {
               </div>
               <div className="lp-footer-column">
                 <h4>Legal</h4>
-                <a href="#">Privacy Policy</a>
-                <a href="#">Terms of Service</a>
+                <Link href="/privacy">Privacy Policy</Link>
+                <Link href="/terms">Terms of Service</Link>
               </div>
             </div>
           </div>
           <div className="lp-footer-bottom">
             <p className="lp-footer-copyright">© 2026 Meridian. Not affiliated with USCIS.</p>
             <div className="lp-footer-legal">
-              <a href="#">Privacy</a>
-              <a href="#">Terms</a>
-              <a href="#">Cookies</a>
+              <Link href="/privacy">Privacy</Link>
+              <Link href="/terms">Terms</Link>
             </div>
           </div>
     </div>

@@ -2553,6 +2553,22 @@ export default function N400Form() {
 
   return (
     <>
+      {/* Legal Disclaimer Banner */}
+      <div style={{
+        background: "linear-gradient(135deg, #FFF8E7 0%, #FEF3CD 100%)",
+        borderBottom: "1px solid #E6D5A8",
+        padding: "12px 24px",
+        fontSize: "13px",
+        color: "#856404",
+        textAlign: "center",
+        lineHeight: "1.5",
+      }}>
+        <strong>Important:</strong> Meridian is a document preparation service, not a law firm. We do not provide legal advice.
+        <a href="/terms" target="_blank" style={{ color: "#856404", marginLeft: "4px", textDecoration: "underline" }}>
+          View Terms of Service
+        </a>
+      </div>
+
       {/* Progress Bar */}
       <div className="progress-bar" style={{ width: `${progress}%` }} />
 
