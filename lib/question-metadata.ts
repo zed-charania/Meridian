@@ -632,6 +632,7 @@ export const PART_8_METADATA: StepMetadata = {
       uscis_text: 'Have you taken any trip outside the United States that lasted more than 6 months?',
       intent: 'USCIS uses this to determine whether additional evidence is needed.',
       guardrail: 'If yes, review the Instructions for required evidence.',
+      explanation_required: true,
     },
   ],
 };

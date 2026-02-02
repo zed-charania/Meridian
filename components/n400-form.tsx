@@ -212,6 +212,14 @@ const n400Schema = z.object({
   spouse_citizenship_by_birth: z.string().optional(),
   spouse_date_became_citizen: z.string().optional(),
   spouse_address_same_as_applicant: z.string().optional(),
+  spouse_street_address: z.string().optional(),
+  spouse_apt_ste_flr: z.string().optional(),
+  spouse_city: z.string().optional(),
+  spouse_state: z.string().optional(),
+  spouse_zip_code: z.string().optional(),
+  spouse_province: z.string().optional(),
+  spouse_postal_code: z.string().optional(),
+  spouse_country: z.string().optional(),
   spouse_a_number: z.string().optional(),
   spouse_times_married: z.string().optional(),
   spouse_country_of_birth: z.string().optional(),
@@ -441,6 +449,39 @@ const n400Schema = z.object({
   {
     message: "Please provide at least one other name you have used",
     path: ["other_names"],
+  }
+).refine(
+  (data) => {
+    const additionalEntries = data.additional_information || [];
+
+    const hasExplanation = (part: string, item: string) =>
+      additionalEntries.some((entry) =>
+        entry.part_number === part &&
+        entry.item_number === item &&
+        typeof entry.explanation === "string" &&
+        entry.explanation.trim().length > 0
+      );
+
+    // Part 8: Trips over 6 months (Item 2)
+    if (data.trips_over_6_months === "yes" && !hasExplanation("8", "2")) return false;
+
+    // Part 9: All questions flagged as explanation_required
+    for (const question of PART_9_METADATA.questions || []) {
+      if (!question.explanation_required) continue;
+      const value = (data as Record<string, unknown>)[question.id];
+      if (value === "yes" && !hasExplanation("9", question.item)) return false;
+    }
+
+    // Part 5, Item 4.d: Spouse address different from applicant
+    if (data.marital_status === "married" && data.spouse_address_same_as_applicant === "no") {
+      if (!hasExplanation("5", "4.d")) return false;
+    }
+
+    return true;
+  },
+  {
+    message: "You answered \"Yes\" to one or more questions that require additional information. Please go to Part 14 (Additional Information) and add an explanation entry for each of those questions before submitting.",
+    path: ["additional_information"],
   }
 );
 
@@ -1127,6 +1168,9 @@ export default function N400Form() {
   const [reviewLater, setReviewLater] = useState<Record<string, boolean>>({});
   // Track which explanation_required questions need prompts shown
   const [showExplanationPrompt, setShowExplanationPrompt] = useState<Record<string, boolean>>({});
+  const [pendingExplanationQuestions, setPendingExplanationQuestions] = useState<
+    { part: string; item: string; title: string }[]
+  >([]);
   // Part 9 internal question pagination
   const [part9QuestionIndex, setPart9QuestionIndex] = useState(0);
   const supabase = getSupabaseBrowserClient();
@@ -1424,20 +1468,61 @@ export default function N400Form() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedData.total_children]);
 
-  // Auto-prompt for Part 14 explanations when "Yes" is answered to Part 9 questions (Items 1-14)
+  // Auto-prompt for Part 14 explanations when "Yes" is answered to questions requiring explanations
   useEffect(() => {
-    const part9Questions = (PART_9_METADATA.questions || [])
-      .filter((question) => question.explanation_required)
-      .map((question) => ({ field: question.id, item: question.item }));
+    const missingQuestions: { part: string; item: string; title: string }[] = [];
+    const additionalEntries = (watchedData.additional_information || []) as {
+      page_number?: string;
+      part_number?: string;
+      item_number?: string;
+      explanation?: string;
+    }[];
 
-    part9Questions.forEach(({ field, item }) => {
+    const hasExplanation = (part: string, item: string) =>
+      additionalEntries.some(
+        (entry) =>
+          entry.part_number === part &&
+          entry.item_number === item &&
+          typeof entry.explanation === "string" &&
+          entry.explanation.trim().length > 0
+      );
+
+    // Part 8: trips_over_6_months
+    if (watchedData.trips_over_6_months === "yes") {
+      const existingEntry = additionalFields.find(
+        (entry) => entry.part_number === "8" && entry.item_number === "2"
+      );
+      if (!existingEntry) {
+        appendAdditional({
+          page_number: "",
+          part_number: "8",
+          item_number: "2",
+          explanation: "",
+        });
+      }
+      if (!hasExplanation("8", "2")) {
+        missingQuestions.push({
+          part: "Part 8",
+          item: "2",
+          title: "Have you taken any trip outside the United States that lasted more than 6 months?",
+        });
+      }
+    }
+
+    // Part 9: All questions with explanation_required
+    const part9Questions = (PART_9_METADATA.questions || []).filter(
+      (question) => question.explanation_required
+    );
+
+    part9Questions.forEach((question) => {
+      const field = question.id;
+      const item = question.item;
       const value = (watchedData as Record<string, unknown>)[field];
+
       if (value === "yes") {
-        // Check if explanation already exists for this question
         const existingEntry = additionalFields.find(
-          entry => entry.part_number === "9" && entry.item_number === item
+          (entry) => entry.part_number === "9" && entry.item_number === item
         );
-        
         if (!existingEntry) {
           appendAdditional({
             page_number: "",
@@ -1446,8 +1531,71 @@ export default function N400Form() {
             explanation: "",
           });
         }
+
+        if (!hasExplanation("9", item)) {
+          missingQuestions.push({
+            part: "Part 9",
+            item,
+            title: question.title || `Background question ${item}`,
+          });
+        }
       }
     });
+
+    // Part 5 (4.d): Spouse address if different from applicant
+    if (watchedData.marital_status === "married" && watchedData.spouse_address_same_as_applicant === "no") {
+      const existingEntry = additionalFields.find(
+        (entry) => entry.part_number === "5" && entry.item_number === "4.d"
+      );
+
+      const spouseAddress = [
+        `Spouse's Physical Address (Part 5, Item 4.d):`,
+        `Street: ${watchedData.spouse_street_address || ""}`,
+        `Apt/Ste/Flr: ${watchedData.spouse_apt_ste_flr || ""}`,
+        `City: ${watchedData.spouse_city || ""}`,
+        `State: ${watchedData.spouse_state || ""}`,
+        `ZIP Code: ${watchedData.spouse_zip_code || ""}`,
+        `Province: ${watchedData.spouse_province || ""}`,
+        `Postal Code: ${watchedData.spouse_postal_code || ""}`,
+        `Country: ${watchedData.spouse_country || ""}`,
+      ]
+        .filter((line) => line.split(":").length > 1 && line.split(":")[1].trim())
+        .join("\n");
+
+      if (!existingEntry) {
+        appendAdditional({
+          page_number: "",
+          part_number: "5",
+          item_number: "4.d",
+          explanation: spouseAddress || "Spouse's physical address (to be provided)",
+        });
+      } else if (spouseAddress) {
+        const idx = additionalFields.findIndex(
+          (entry) => entry.part_number === "5" && entry.item_number === "4.d"
+        );
+        if (idx !== -1) {
+          setValue(`additional_information.${idx}.explanation`, spouseAddress);
+        }
+      }
+
+      if (!hasExplanation("5", "4.d")) {
+        missingQuestions.push({
+          part: "Part 5",
+          item: "4.d",
+          title: "Is your current spouse's present physical address the same as your physical address?",
+        });
+      }
+    } else if (watchedData.spouse_address_same_as_applicant === "yes") {
+      // Remove spouse address entry if address is now the same
+      const spouseAddressEntryIndex = additionalFields.findIndex(
+        (entry) => entry.part_number === "5" && entry.item_number === "4.d"
+      );
+      if (spouseAddressEntryIndex !== -1) {
+        removeAdditional(spouseAddressEntryIndex);
+      }
+    }
+
+    setPendingExplanationQuestions(missingQuestions);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(watchedData)]);
 
@@ -1626,8 +1774,8 @@ export default function N400Form() {
         ...(data.mailing_same_as_residence === "no" && {
           mailing_street_address: data.mailing_street_address,
           mailing_apt_type: data.mailing_apt_type,
-          mailing_apt_ste_flr: data.mailing_apt_ste_flr,
-          mailing_in_care_of: data.mailing_in_care_of,
+        mailing_apt_ste_flr: data.mailing_apt_ste_flr,
+        mailing_in_care_of: data.mailing_in_care_of,
           mailing_city: data.mailing_city,
           mailing_state: data.mailing_state,
           mailing_zip_code: data.mailing_zip_code,
@@ -1684,6 +1832,16 @@ export default function N400Form() {
         spouse_citizenship_by_birth: data.spouse_citizenship_by_birth,
         spouse_date_became_citizen: data.spouse_date_became_citizen,
         spouse_address_same_as_applicant: data.spouse_address_same_as_applicant,
+        ...(data.spouse_address_same_as_applicant === "no" && {
+          spouse_street_address: data.spouse_street_address,
+          spouse_apt_ste_flr: data.spouse_apt_ste_flr,
+          spouse_city: data.spouse_city,
+          spouse_state: data.spouse_state,
+          spouse_zip_code: data.spouse_zip_code,
+          spouse_province: data.spouse_province,
+          spouse_postal_code: data.spouse_postal_code,
+          spouse_country: data.spouse_country,
+        }),
           spouse_a_number: data.spouse_a_number,
         spouse_times_married: data.spouse_times_married,
           spouse_country_of_birth: data.spouse_country_of_birth,
@@ -1952,20 +2110,23 @@ export default function N400Form() {
       
       // Finalize submission
       const result = await submitN400Form(payload, session.access_token);
-      
+
       if (!result.success || !result.data) {
         if (result.error) setAuthError(result.error);
         return;
       }
 
+      // Use the newly submitted form's ID for downstream actions
+      const finalFormId = result.data.id;
+      setSubmittedId(finalFormId ?? null);
       setIsFormSubmitted(true);
       
-      // Generate PDF
-      if (submittedId) {
-        await handleDownloadPDF(submittedId);
+      // Generate PDF from the submitted record
+      if (finalFormId) {
+        await handleDownloadPDF(finalFormId);
         
         // Redirect to success page after PDF generation
-        router.push(`/form/success?formId=${submittedId}`);
+        router.push(`/form/success?formId=${finalFormId}`);
       }
     } catch (error) {
       console.error("Submission error:", error);
@@ -2056,15 +2217,15 @@ export default function N400Form() {
       }
 
       // Read the response blob once and create download
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `N-400_${watchedData.last_name}_${watchedData.first_name}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `N-400_${watchedData.last_name}_${watchedData.first_name}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
     } catch (error) {
       console.error("Download error:", error);
       setAuthError("Failed to download PDF. Please try again.");
@@ -3283,7 +3444,7 @@ export default function N400Form() {
 
                 {watchedData.mailing_same_as_residence === "no" && (
                     <div style={{ marginTop: "20px", padding: "20px", background: "var(--bg)", borderRadius: "12px" }}>
-                      <div className="form-group">
+                    <div className="form-group">
                         <label className="form-label">In Care Of (if any)</label>
                         <input type="text" className="form-input" placeholder="In Care Of Name" {...register("mailing_in_care_of")} />
                       </div>
@@ -3315,8 +3476,8 @@ export default function N400Form() {
                         <div className="form-group">
                           <label className="form-label">ZIP Code</label>
                       <input type="text" className="form-input" placeholder="ZIP" {...register("mailing_zip_code")} />
+                        </div>
                       </div>
-                    </div>
                     <div className="form-row-thirds" style={{ marginTop: "12px" }}>
                         <div className="form-group">
                           <label className="form-label">Province (if outside US)</label>
@@ -3756,7 +3917,7 @@ export default function N400Form() {
                             <option value="">Select Country...</option>
                             {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
-                        </div>
+                  </div>
 
                         {/* Item 4.c: Date Entered into Marriage */}
                         <div className="form-group">
@@ -3767,7 +3928,60 @@ export default function N400Form() {
                         {/* Item 4.d: Spouse Address Same */}
                     <YesNoField name="spouse_address_same_as_applicant" metaId="spouse_address_same_as_applicant" label="4.d. Is your current spouse's present physical address the same as your physical address?" />
                         {watchedData.spouse_address_same_as_applicant === "no" && (
-                          <p className="helper-text" style={{ marginTop: "-10px" }}>If you answered "No," provide address in Part 14. Additional Information.</p>
+                          <>
+                            <p className="helper-text" style={{ marginTop: "-10px", marginBottom: "16px" }}>If you answered "No," provide address in Part 14. Additional Information.</p>
+                            
+                            {/* Spouse Address Fields */}
+                            <div style={{ padding: "16px", background: "var(--bg)", borderRadius: "8px", marginTop: "12px" }}>
+                              <h4 style={{ fontSize: "16px", fontWeight: "600", marginBottom: "16px" }}>Spouse's Physical Address (will be added to Part 14)</h4>
+                              
+                              <div className="form-group">
+                                <label className="form-label">Street Number and Name</label>
+                                <input type="text" className="form-input" {...register("spouse_street_address")} />
+                              </div>
+                              
+                              <div className="form-group">
+                                <label className="form-label">Apt. Ste. Flr. Number (if any)</label>
+                                <input type="text" className="form-input" {...register("spouse_apt_ste_flr")} />
+                              </div>
+                              
+                              <div className="form-row-halves">
+                                <div className="form-group">
+                                  <label className="form-label">City or Town</label>
+                                  <input type="text" className="form-input" {...register("spouse_city")} />
+                                </div>
+                                <div className="form-group">
+                                  <label className="form-label">State</label>
+                                  <select className="form-select" {...register("spouse_state")}>
+                                    <option value="">Select State...</option>
+                                    {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                                  </select>
+                                </div>
+                              </div>
+                              
+                              <div className="form-row-halves">
+                                <div className="form-group">
+                                  <label className="form-label">ZIP Code</label>
+                                  <input type="text" className="form-input" {...register("spouse_zip_code")} />
+                                </div>
+                                <div className="form-group">
+                                  <label className="form-label">Province</label>
+                                  <input type="text" className="form-input" {...register("spouse_province")} />
+                                </div>
+                              </div>
+                              
+                              <div className="form-row-halves">
+                                <div className="form-group">
+                                  <label className="form-label">Postal Code</label>
+                                  <input type="text" className="form-input" {...register("spouse_postal_code")} />
+                                </div>
+                                <div className="form-group">
+                                  <label className="form-label">Country</label>
+                                  <input type="text" className="form-input" placeholder="United States" {...register("spouse_country")} />
+                                </div>
+                              </div>
+                            </div>
+                          </>
                         )}
 
                         {/* Item 5.a: When did spouse become citizen */}
@@ -4205,7 +4419,7 @@ export default function N400Form() {
                           <label className="form-label">ZIP Code</label>
                           <input type="text" className="form-input" placeholder="ZIP" {...register("preparer_zip_code")} />
                         </div>
-                      </div>
+                </div>
 
                     <div className="form-row-equal">
                       <div className="form-group">
@@ -4288,6 +4502,40 @@ export default function N400Form() {
             {/* ═══════════════════════════════════════════════════════════════ */}
             {currentStep === 15 && (
               <>
+                {pendingExplanationQuestions.length > 0 && (
+                  <div
+                    className="review-alert-section warning"
+                    style={{
+                      marginBottom: "16px",
+                      backgroundColor: "#FFF8E1",
+                      border: "1px solid #FACC15",
+                      borderRadius: "10px",
+                      padding: "16px 18px",
+                    }}
+                  >
+                    <h3 className="review-alert-title">
+                      <span>⚠️</span> Additional information needed in Part 14
+                    </h3>
+                    <p className="review-alert-description">
+                      Please add explanations for each of the following questions you answered &quot;Yes&quot; to:
+                    </p>
+                    <ul className="review-alert-list">
+                      {pendingExplanationQuestions.map((q) => (
+                        <li key={`${q.part}-${q.item}`}>
+                          <span style={{ fontWeight: 600 }}>
+                            {q.part}, Question {q.item}
+                          </span>
+                          {": "}
+                          <span>{q.title}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="review-alert-description" style={{ marginTop: "8px" }}>
+                      Use the entries below to reference the Part and Item numbers and describe what happened.
+                    </p>
+                  </div>
+                )}
+
                 {/* Card: Additional Information */}
                 <div className="question-card">
                   <div className="question-card-title">Additional Information</div>
@@ -4540,16 +4788,16 @@ export default function N400Form() {
               <div className="button-row">
                 <button type="button" className="btn-back" onClick={handleBack}>← Back</button>
                 {paymentStatus === "paid" ? (
-                  <button type="submit" className="btn-next" disabled={isSubmitting}>
-                    {isSubmitting ? (
-                      <>
-                        <span className="spinner" />
-                        Submitting...
-                      </>
-                    ) : (
-                      "SUBMIT APPLICATION"
-                    )}
-                  </button>
+                <button type="submit" className="btn-next" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <span className="spinner" />
+                      Submitting...
+                    </>
+                  ) : (
+                    "SUBMIT APPLICATION"
+                  )}
+                </button>
                 ) : (
                   <button 
                     type="button" 
